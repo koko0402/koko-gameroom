@@ -1,0 +1,78 @@
+@import url('https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;800&display=swap');
+
+:root {
+  --table: #d9e0e8;
+  --board: #faf7f0;
+  --line: #b9c2cc;
+  --ink: #1f2937;
+  --sub: #5b6573;
+  --p1: #e4572e;
+  --p2: #2f6fde;
+  --gray: #9aa3ae;
+  --ok: #2e9e6a;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --table: #1b222c;
+    --board: #2a323e;
+    --line: #475264;
+    --ink: #e8edf3;
+    --sub: #a3adba;
+    --gray: #7c8795;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--table);
+  color: var(--ink);
+  font-family: 'M PLUS Rounded 1c', system-ui, sans-serif;
+  line-height: 1.6;
+  -webkit-tap-highlight-color: transparent;
+}
+a { color: inherit; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--p2); outline-offset: 2px; }
+
+.wrap { max-width: 720px; margin: 0 auto; padding: 16px 16px 48px; }
+
+/* ゲーム画面 */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.top a { text-decoration: none; color: var(--sub); font-size: 15px; }
+.top h1 { font-size: 22px; font-weight: 800; margin: 0; }
+
+.turn {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 48px; margin: 0 0 12px;
+  font-weight: 700; font-size: 18px;
+}
+.dot { width: 22px; height: 22px; border-radius: 50%; flex: none; }
+.dot.p1 { background: var(--p1); }
+.dot.p2 { background: var(--p2); }
+.turn.win { color: var(--ok); }
+
+.board-box {
+  background: var(--board);
+  border-radius: 14px;
+  padding: 12px;
+  box-shadow: 0 2px 0 var(--line);
+}
+.board-box svg { display: block; width: 100%; height: auto; touch-action: manipulation; user-select: none; }
+
+.bar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center; }
+.btn {
+  border: 2px solid var(--ink); background: transparent;
+  border-radius: 999px; padding: 6px 16px; cursor: pointer; font-weight: 700;
+}
+.btn.on { background: var(--ink); color: var(--board); }
+.btn:disabled { opacity: .35; cursor: default; }
+
+details.rules { margin-top: 20px; color: var(--sub); }
+details.rules summary { cursor: pointer; font-weight: 700; color: var(--ink); }
+details.rules li { margin: 4px 0; }
+.note { font-size: 13px; color: var(--sub); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}

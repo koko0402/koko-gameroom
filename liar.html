@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>うそつき宣言</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  /* 黒い卓に白いカード。駆け引きっぽい静かな見た目 */
+  :root, :root:not([data-theme="light"]) {
+    --table: #121212; --board: #1e1e1e; --line: #333; --ink: #f1f1f1; --sub: #a0a0a0;
+    --p1: #e0424b; --p2: #3b82f6; --ok: #e8c547;
+  }
+  .btn.on { color: #121212; }
+  .score { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+  .score div { background: var(--board); border-radius: 12px; padding: 10px 14px; border: 2px solid transparent; }
+  .score div.now { border-color: var(--ink); }
+  .score b { display: block; font-size: 30px; line-height: 1.1; }
+  .stage { background: var(--board); border-radius: 14px; padding: 18px 16px; min-height: 260px; }
+  .stage h2 { margin: 0 0 10px; font-size: 20px; }
+  .cards { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+  .card {
+    width: 54px; height: 78px; border-radius: 8px; border: 2px solid #ddd; background: #fafafa; color: #111;
+    font-size: 30px; font-weight: 800; display: grid; place-items: center; cursor: pointer;
+    font-family: Georgia, 'Times New Roman', serif; box-shadow: 0 3px 0 #000;
+  }
+  .card.pick { transform: translateY(-8px); border-color: var(--ok); box-shadow: 0 3px 0 var(--ok); }
+  .card.back { background: repeating-linear-gradient(45deg, #7a1f25 0 6px, #5a161b 6px 12px); border-color: #ddd; color: transparent; cursor: default; }
+  .nums { display: grid; grid-template-columns: repeat(9, 1fr); gap: 6px; margin: 8px 0 14px; }
+  .nums .btn { padding: 6px 0; }
+  .big { font-size: 44px; font-weight: 800; }
+  .log { margin-top: 14px; font-size: 14px; color: var(--sub); }
+  .log li { margin: 2px 0; }
+  .gate { text-align: center; padding-top: 30px; }
+  .gate p { font-size: 22px; font-weight: 800; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="index.html">← ゲーム一覧</a><h1>うそつき宣言</h1></div>
+  <div class="score" id="score"></div>
+  <div class="stage" id="stage"></div>
+  <div class="bar"><button class="btn" id="reset">最初から</button></div>
+  <ol class="log" id="log"></ol>
+  <details class="rules" open>
+    <summary>ルール</summary>
+    <ul>
+      <li>2人用。山札は1〜9が4枚ずつ。それぞれ5枚配られる。</li>
+      <li>手番の人は、手札から1枚を伏せて出して、1〜9の好きな数を宣言する。本当の数じゃなくていい。</li>
+      <li>相手は「信じる」か「ダウト」を選ぶ。</li>
+      <li>信じる: 宣言した数がそのまま宣言した人の点になる。</li>
+      <li>ダウト: カードを表にする。本当の数が宣言以上なら正直なので、宣言した人が宣言の2倍の点。宣言より小さければうそなので、ダウトした人が宣言ぶんの点をもらう。</li>
+      <li>交代で出して、5枚ずつ出し切ったら終わり。点が多い方の勝ち。同じなら引き分け。</li>
+    </ul>
+    <p class="note">手札を見るときは、相手に画面を見られないように。受け渡し画面で「見る」を押した人だけが見る。</p>
+  </details>
+</div>
+<script src="online.js"></script>
+<script>
+const NAME = ['あか', 'あお'];
+const stage = document.getElementById('stage');
+let hands, score, turn, played, phase, pick, say, log;
+
+function reset() {
+  const deck = [];
+  for (let n = 1; n <= 9; n++) for (let k = 0; k < 4; k++) deck.push(n);
+  for (let i = deck.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [deck[i], deck[j]] = [deck[j], deck[i]]; }
+  hands = [deck.slice(0, 5).sort((a, b) => a - b), deck.slice(5, 10).sort((a, b) => a - b)];
+  score = [0, 0]; turn = 0; played = 0; log = [];
+  gate();
+}
+
+// 受け渡し画面。手札はここを通った本人にだけ出す
+function gate() {
+  phase = Online.active ? 'hand' : 'gate'; pick = null; say = null;
+  draw();
+}
+
+function draw() {
+  document.getElementById('score').innerHTML = [0, 1].map(p =>
+    `<div class="${p === turn && phase !== 'end' ? 'now' : ''}"><span class="dot ${p ? 'p2' : 'p1'}" style="display:inline-block;vertical-align:-4px"></span> ${NAME[p]}　残り${hands[p].length}枚<b>${score[p]}点</b></div>`).join('');
+  document.getElementById('log').innerHTML = log.map(t => `<li>${t}</li>`).join('');
+  const me = NAME[turn], you = NAME[1 - turn];
+  let s = '';
+  if (phase === 'gate') {
+    s = `<div class="gate"><p>${me}に渡して</p><p class="note">${you}は画面を見ないで</p><button class="btn" data-a="open">${me}が見る</button></div>`;
+  } else if (phase === 'hand' && !Online.isMine(turn)) {
+    s = `<div class="gate"><p>${me}がカードを選んでる…</p></div>`;
+  } else if (phase === 'judge' && Online.isMine(turn) && Online.active) {
+    s = `<h2>伏せて出した</h2><div class="cards"><div class="card back"></div></div><p>宣言: <span class="big">${say}</span></p><p>${you}が考えてる…</p>`;
+  } else if (phase === 'hand') {
+    s = `<h2>${me}の手札</h2><p class="note">伏せて出すカードを選ぶ</p><div class="cards">` +
+      hands[turn].map((n, i) => `<button class="card ${pick === i ? 'pick' : ''}" data-c="${i}">${n}</button>`).join('') + `</div>` +
+      `<p class="note">宣言する数を選ぶ(うそでもいい)</p><div class="nums">` +
+      Array.from({ length: 9 }, (_, i) => `<button class="btn ${say === i + 1 ? 'on' : ''}" data-n="${i + 1}">${i + 1}</button>`).join('') + `</div>` +
+      `<button class="btn" data-a="put" ${pick === null || say === null ? 'disabled' : ''}>伏せて出す(画面が隠れる)</button>`;
+  } else if (phase === 'judge') {
+    s = `<h2>${me}が1枚伏せて出した</h2><div class="cards"><div class="card back"></div></div>` +
+      `<p>宣言: <span class="big">${say}</span></p><p>${you}はどうする?</p>` +
+      `<div class="bar"><button class="btn" data-a="trust">信じる</button><button class="btn" data-a="doubt">ダウト</button></div>`;
+  } else if (phase === 'result' || phase === 'end') {
+    s = `<h2>${last.title}</h2>` + (last.card ? `<div class="cards"><div class="card">${last.card}</div></div>` : '') + `<p>${last.text}</p>`;
+    if (phase === 'end') {
+      const w = score[0] === score[1] ? -1 : score[0] > score[1] ? 0 : 1;
+      s += `<p class="big" style="font-size:28px;color:var(--ok)">${w < 0 ? '引き分け' : NAME[w] + 'の勝ち'}(${score[0]} 対 ${score[1]})</p>`;
+    } else s += `<button class="btn" data-a="next">次へ</button>`;
+  }
+  stage.innerHTML = s;
+  Online.sync();
+}
+
+let last = {};
+function judge(doubt) {
+  const me = turn, you = 1 - turn, card = hands[me].splice(pick, 1)[0];
+  played++;
+  if (!doubt) {
+    score[me] += say;
+    last = { title: `${NAME[you]}は信じた`, text: `${NAME[me]}に${say}点。本当のカードは誰にも分からない。` };
+    log.push(`${NAME[me]}「${say}」→ 信じた。${NAME[me]} +${say}`);
+  } else if (card >= say) {
+    score[me] += say * 2;
+    last = { title: 'ダウト! 結果は正直', card, text: `本当は${card}。${NAME[me]}に宣言の2倍の${say * 2}点。` };
+    log.push(`${NAME[me]}「${say}」→ ダウト。本当は${card}で正直。${NAME[me]} +${say * 2}`);
+  } else {
+    score[you] += say;
+    last = { title: 'ダウト! 結果はうそ', card, text: `本当は${card}。見破った${NAME[you]}に${say}点。` };
+    log.push(`${NAME[me]}「${say}」→ ダウト。本当は${card}でうそ。${NAME[you]} +${say}`);
+  }
+  phase = played === 10 ? 'end' : 'result';
+  draw();
+}
+
+stage.addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b || !Online.canAct()) return;
+  if (b.dataset.c !== undefined) { pick = +b.dataset.c; draw(); }
+  else if (b.dataset.n) { say = +b.dataset.n; draw(); }
+  else if (b.dataset.a === 'open') { phase = 'hand'; draw(); }
+  else if (b.dataset.a === 'put') { phase = 'judge'; draw(); }
+  else if (b.dataset.a === 'trust') judge(false);
+  else if (b.dataset.a === 'doubt') judge(true);
+  else if (b.dataset.a === 'next') { turn = 1 - turn; gate(); }
+});
+document.getElementById('reset').onclick = reset;
+Online.init({ game: 'liar', names: NAME,
+  getState: () => ({ hands, score, turn, played, phase, pick, say, log, last }),
+  setState: s => { ({ hands, score, turn, played, phase, pick, say, log, last } = s); draw(); },
+  onConnect: () => { if (phase === 'gate') phase = 'hand'; draw(); },
+  turn: () => phase === 'hand' ? turn : phase === 'judge' ? 1 - turn : null });
+reset();
+</script>
+</body>
+</html>

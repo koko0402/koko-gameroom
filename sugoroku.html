@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>だましあいすごろく</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  /* 夜の街の地図っぽい見た目。自分の駒だけ光る */
+  :root, :root:not([data-theme="light"]) {
+    --table: #14172b; --board: #1f2440; --line: #343a63; --ink: #eef0ff; --sub: #a3a8cc;
+    --p1: #ff6b6b; --p2: #4dabf7; --ok: #ffd43b;
+  }
+  .btn.on { color: #14172b; }
+  .stage { background: var(--board); border-radius: 14px; padding: 16px; }
+  .stage h2 { margin: 0 0 6px; font-size: 20px; }
+  .stage svg { display: block; width: 100%; height: auto; margin: 8px 0; }
+  .gate { text-align: center; padding: 24px 0 10px; }
+  .gate p { font-size: 22px; font-weight: 800; margin: 6px 0; }
+  .items { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+  .item { border: 2px solid var(--ink); border-radius: 10px; padding: 6px 10px; background: transparent; cursor: pointer; text-align: left; }
+  .item small { display: block; color: var(--sub); font-size: 12px; }
+  .item:disabled { opacity: .35; cursor: default; }
+  .msg { background: rgba(255,255,255,.06); border-radius: 10px; padding: 8px 12px; margin: 8px 0; }
+  .msg p { margin: 2px 0; }
+  .die { display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 8px; background: #fff; color: #111; font-size: 26px; font-weight: 800; margin-right: 8px; vertical-align: middle; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="index.html">← ゲーム一覧</a><h1>だましあいすごろく</h1></div>
+  <div class="stage" id="stage"></div>
+  <div class="bar"><button class="btn" id="reset">最初から</button></div>
+  <details class="rules" open>
+    <summary>ルール</summary>
+    <ul>
+      <li>2人用。30マス目(ゴール)に先に着いた方の勝ち。</li>
+      <li>自分の場所は、自分の番に受け渡し画面を通ったときだけ見える。相手の場所は見えない。</li>
+      <li>自分の番は「振る」(1〜6進む)か「振らない」(アイテムを1つ引く)。その前にアイテムをいくつでも使える。</li>
+      <li>アイテムは3つまで持てる。3つ持ってるときは「振らない」を選べない。</li>
+      <li>ワナ: 今いるマスに置く。相手がそのマスにちょうど止まったら5マス戻る。自分のワナにはかからない。</li>
+      <li>のぞき見: 相手が今どこにいるか分かる。</li>
+      <li>早足: 次に振ったサイコロに+3。重ねては使えない。</li>
+      <li>★マスはみんなに見えてる。止まると、2進む・3戻る・アイテムのどれか(マスごとに決まってる)。</li>
+      <li>ワナと★が同じマスなら、ワナが先。ワナで戻った先の★は発動しない。</li>
+    </ul>
+  </details>
+</div>
+<script src="online.js"></script>
+<script>
+const NAME = ['あか', 'あお'];
+const COLOR = ['var(--p1)', 'var(--p2)'];
+const GOAL = 30;
+const EVENT = { 4: 'go', 7: 'item', 11: 'back', 13: 'item', 16: 'go', 19: 'back', 22: 'item', 25: 'back', 27: 'go' };
+const EV_TEXT = { go: '2進む', back: '3戻る', item: 'アイテム' };
+const ITEMS = {
+  trap: { name: 'ワナ', desc: '今いるマスに置く' },
+  peek: { name: 'のぞき見', desc: '相手の場所が分かる' },
+  fast: { name: '早足', desc: '次のサイコロ+3' },
+};
+const stage = document.getElementById('stage');
+let pos, items, traps, fast, turn, phase, notes, winner, peeked, round;
+
+function reset() {
+  pos = [0, 0]; items = [[], []]; traps = [[], []]; fast = [false, false];
+  turn = 0; winner = null; round = 1;
+  phase = 'gate'; notes = []; peeked = null;
+  draw();
+}
+
+function randItem() { const k = Object.keys(ITEMS); return k[Math.floor(Math.random() * k.length)]; }
+function gainItem(p) {
+  if (items[p].length >= 3) return '持ちきれないのでアイテムは捨てた。';
+  const it = randItem(); items[p].push(it);
+  return `アイテム「${ITEMS[it].name}」をもらった。`;
+}
+
+// 盤のマスの位置。6列のジグザグ
+function cellXY(i) {
+  const r = Math.floor(i / 6), c = r % 2 ? 5 - (i % 6) : i % 6;
+  return [30 + c * 52, 30 + r * 52];
+}
+
+function board(me, peek = true) {
+  let s = `<svg viewBox="0 0 320 320">`;
+  for (let i = 0; i < GOAL; i++) { const [x1, y1] = cellXY(i), [x2, y2] = cellXY(i + 1); s += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#343a63" stroke-width="6" stroke-linecap="round"/>`; }
+  for (let i = 0; i <= GOAL; i++) {
+    const [x, y] = cellXY(i), ev = EVENT[i];
+    const fill = i === 0 ? '#2b8a3e' : i === GOAL ? '#e67700' : ev ? '#3b3f6e' : '#262b4d';
+    s += `<rect x="${x - 21}" y="${y - 21}" width="42" height="42" rx="9" fill="${fill}" stroke="#4a5190"/>`;
+    s += `<text x="${x}" y="${y - 8}" text-anchor="middle" font-size="10" fill="#a3a8cc">${i === 0 ? 'スタート' : i === GOAL ? 'ゴール' : i}</text>`;
+    if (ev) s += `<text x="${x}" y="${y + 12}" text-anchor="middle" font-size="10" fill="#ffd43b">★${EV_TEXT[ev]}</text>`;
+    if (me !== undefined && traps[me].includes(i)) s += `<text x="${x + 13}" y="${y + 16}" text-anchor="middle" font-size="13">⚠</text>`;
+  }
+  if (me !== undefined) {
+    if (peek && peeked !== null) { const [x, y] = cellXY(peeked); s += `<circle cx="${x - 8}" cy="${y + 4}" r="9" fill="none" stroke="${COLOR[1 - me]}" stroke-width="3" stroke-dasharray="3 3"/>`; }
+    const [x, y] = cellXY(pos[me]);
+    s += `<circle cx="${x + 6}" cy="${y + 4}" r="11" fill="${COLOR[me]}" stroke="#fff" stroke-width="2.5"/>`;
+  }
+  return s + `</svg>`;
+}
+
+function useItem(k) {
+  const i = items[turn].indexOf(k); if (i < 0) return;
+  if (k === 'trap') {
+    if (traps[turn].includes(pos[turn]) || pos[turn] === 0) { notes.push('ここにはワナを置けない。'); draw(); return; }
+    traps[turn].push(pos[turn]); notes.push(`${pos[turn]}マス目にワナを置いた。`);
+  } else if (k === 'peek') {
+    peeked = pos[1 - turn]; notes.push(`${NAME[1 - turn]}は今 ${peeked === 0 ? 'スタート' : peeked + 'マス目'} にいる。`);
+  } else if (k === 'fast') {
+    if (fast[turn]) { notes.push('早足はもう使ってる。'); draw(); return; }
+    fast[turn] = true; notes.push('早足を使った。次のサイコロ+3。');
+  }
+  items[turn].splice(i, 1);
+  draw();
+}
+
+function roll() {
+  const me = turn, d = 1 + Math.floor(Math.random() * 6), bonus = fast[me] ? 3 : 0;
+  fast[me] = false;
+  pos[me] = Math.min(GOAL, pos[me] + d + bonus);
+  notes.push(`<span class="die">${d}</span>${bonus ? '+3(早足) ' : ''}進んで ${pos[me]}マス目。`);
+  land(me);
+  phase = pos[me] >= GOAL ? 'win' : 'done';
+  if (phase === 'win') winner = me;
+  draw();
+}
+
+function land(me) {
+  const you = 1 - me, t = traps[you].indexOf(pos[me]);
+  if (pos[me] >= GOAL) return;
+  if (t >= 0) {
+    traps[you].splice(t, 1);
+    pos[me] = Math.max(0, pos[me] - 5);
+    notes.push(`ワナにかかった! 5マス戻って ${pos[me]}マス目。`);
+    return;
+  }
+  const ev = EVENT[pos[me]];
+  if (ev === 'go') { pos[me] = Math.min(GOAL, pos[me] + 2); notes.push(`★2進む。${pos[me]}マス目。`); }
+  if (ev === 'back') { pos[me] = Math.max(0, pos[me] - 3); notes.push(`★3戻る。${pos[me]}マス目。`); }
+  if (ev === 'item') notes.push('★' + gainItem(me));
+}
+
+function stay() {
+  if (items[turn].length >= 3) return;
+  notes.push('振らずに様子を見た。' + gainItem(turn));
+  phase = 'done'; draw();
+}
+
+function draw() {
+  const me = NAME[turn], you = NAME[1 - turn];
+  let s = '';
+  if (phase === 'gate') {
+    s = `<div class="gate"><p>${round}ターン目</p><p><span class="dot ${turn ? 'p2' : 'p1'}" style="display:inline-block;vertical-align:-3px"></span> ${me}に渡して</p><p class="note">${you}は画面を見ないで</p><button class="btn" data-a="open">${me}が見る</button></div>` + board();
+  } else if ((phase === 'act' || phase === 'done') && !Online.isMine(turn)) {
+    s = `<div class="gate"><p>${me}の番(${round}ターン目)</p><p class="note">相手が考えてる…</p></div>` +
+      `<p class="note">自分(${you})の場所: ${pos[1 - turn] === 0 ? 'スタート' : pos[1 - turn] + 'マス目'}。持ってるアイテム: ${items[1 - turn].map(k => ITEMS[k].name).join('、') || 'なし'}</p>` + board(1 - turn, false);
+  } else if (phase === 'act' || phase === 'done') {
+    s = `<h2>${me}の番</h2><p class="note">今 ${pos[turn] === 0 ? 'スタート' : pos[turn] + 'マス目'}。⚠は自分のワナ${peeked !== null ? '、点線は相手' : ''}。</p>` + board(turn);
+    if (notes.length) s += `<div class="msg">${notes.map(n => `<p>${n}</p>`).join('')}</div>`;
+    s += `<p class="note" style="margin-bottom:0">持ってるアイテム(${items[turn].length}/3)${phase === 'act' ? ': 押すと使う' : ''}</p><div class="items">` +
+      (items[turn].length ? items[turn].map(k => `<button class="item" data-i="${k}" ${phase !== 'act' ? 'disabled' : ''}>${ITEMS[k].name}<small>${ITEMS[k].desc}</small></button>`).join('') : '<span class="note">なし</span>') + `</div>`;
+    if (phase === 'act') s += `<div class="bar"><button class="btn" data-a="roll">振る</button><button class="btn" data-a="stay" ${items[turn].length >= 3 ? 'disabled' : ''}>振らない(アイテムを引く)</button></div>`;
+    else s += `<div class="bar"><button class="btn" data-a="end">見終わった(画面を隠す)</button></div>`;
+  } else if (phase === 'win') {
+    s = `<div class="gate"><p style="color:var(--ok)">${me}がゴール! ${me}の勝ち</p></div>` + `<div class="msg">${notes.map(n => `<p>${n}</p>`).join('')}</div>` +
+      `<p class="note">最後の場所: あか ${pos[0]}マス目 / あお ${pos[1]}マス目</p>`;
+  }
+  stage.innerHTML = s;
+  Online.sync();
+}
+
+stage.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b || b.disabled || !Online.canAct()) return;
+  if (b.dataset.i) useItem(b.dataset.i);
+  else if (b.dataset.a === 'open') { phase = 'act'; draw(); }
+  else if (b.dataset.a === 'roll') roll();
+  else if (b.dataset.a === 'stay') stay();
+  else if (b.dataset.a === 'end') {
+    turn = 1 - turn; if (turn === 0) round++;
+    notes = []; peeked = null; phase = Online.active ? 'act' : 'gate'; draw();
+  }
+});
+document.getElementById('reset').onclick = () => { reset(); if (Online.active) { phase = 'act'; draw(); } };
+Online.init({ game: 'sugoroku', names: NAME,
+  getState: () => ({ pos, items, traps, fast, turn, phase, notes, winner, peeked, round }),
+  setState: s => { ({ pos, items, traps, fast, turn, phase, notes, winner, peeked, round } = s); draw(); },
+  onConnect: () => { if (phase === 'gate') phase = 'act'; draw(); },
+  turn: () => phase === 'act' || phase === 'done' ? turn : null });
+reset();
+</script>
+</body>
+</html>

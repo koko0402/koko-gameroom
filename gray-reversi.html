@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>灰色リバーシ</title>
+<link rel="stylesheet" href="style.css">
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  /* 箱と同じ、白黒だけの静かな見た目 */
+  :root, :root:not([data-theme="light"]) {
+    --felt: #e9e9e7; --blk: #1b1b1b; --wht: #fbfbfa; --gry: #8f8f8f;
+    --table: #d4d4d2; --board: #f7f7f5; --ink: #1b1b1b; --sub: #555; --line: #bdbdbb;
+  }
+  body { background: var(--table); }
+  body, .btn { font-family: 'Shippori Mincho', 'Yu Mincho', serif; }
+  .top h1 { font-weight: 700; letter-spacing: .08em; }
+  .title-box {
+    display: grid; grid-template-rows: auto auto; border-radius: 4px; overflow: hidden;
+    box-shadow: 0 3px 10px rgba(0,0,0,.18); margin-bottom: 14px;
+  }
+  .title-box .dark { background: #1b1b1b; color: #f2f2f2; padding: 18px 16px 10px; font-size: 20px; letter-spacing: .12em; }
+  .title-box .light { background: #fbfbfa; padding: 10px 16px 14px; display: flex; align-items: center; gap: 14px; }
+  .title-box .light b { font-size: 22px; letter-spacing: .2em; font-weight: 700; }
+  .title-box .light small { color: #666; font-size: 12px; letter-spacing: .05em; }
+  .board-box { background: #1b1b1b; border-radius: 4px; padding: 10px; box-shadow: 0 3px 10px rgba(0,0,0,.2); }
+  .pick { display: flex; gap: 8px; }
+  .pick .btn { display: flex; align-items: center; gap: 6px; }
+  .chip { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--ink); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="index.html">← ゲーム一覧</a></div>
+  <div class="title-box">
+    <div class="dark">灰色に捧ぐ</div>
+    <div class="light">
+      <svg width="64" height="30" viewBox="0 0 64 30" aria-hidden="true">
+        <circle cx="10" cy="15" r="9" fill="#1b1b1b"/>
+        <g fill="none" stroke="#1b1b1b" stroke-width="1.2">
+          <ellipse cx="32" cy="15" rx="11" ry="4.5"/><ellipse cx="32" cy="15" rx="11" ry="4.5" transform="rotate(60 32 15)"/><ellipse cx="32" cy="15" rx="11" ry="4.5" transform="rotate(-60 32 15)"/></g>
+        <circle cx="32" cy="15" r="2" fill="#1b1b1b"/>
+        <circle cx="54" cy="15" r="9" fill="#fff" stroke="#1b1b1b" stroke-width="1"/>
+      </svg>
+      <h1 style="margin:0;font-size:inherit;font-weight:inherit"><b>リバーシ</b><br><small>Reversi dedicated to gray</small></h1>
+    </div>
+  </div>
+  <p class="turn" id="turn"></p>
+  <div class="board-box"><svg id="svg" viewBox="0 0 420 420"></svg></div>
+  <div class="bar">
+    <span class="pick" id="pick"></span>
+    <button class="btn" id="reveal">答え合わせ</button>
+    <button class="btn" id="reset">最初から</button>
+  </div>
+  <p class="note" id="info"></p>
+  <details class="rules" open>
+    <summary>ルール(シュレーディンガーに捧ぐリバーシ を元にしたもの)</summary>
+    <ul>
+      <li>7×7の盤。真ん中に量子コマ(灰)、そのまわりに黒と白を置いて始める。うち黒1つ・白1つは裏向き(灰に見える)。</li>
+      <li>先攻が黒、後攻が白。「自分のコマ」「相手のコマ」という区別はなく、最後に自分の色が多い方の勝ち。</li>
+      <li>手番では1つ置く。パスはできない。置けるのは黒・白・量子コマのどれでもいい(数に限りあり: 黒26・白26・量子8。初期配置の分も含む)。</li>
+      <li>置いたコマと同じ見た目のコマで間をはさめる所にだけ置ける。はさんだコマは全部裏返す。</li>
+      <li>黒と白のコマは裏が灰色。裏返すと灰色に見えて、もう一度裏返すと元の色に戻る。量子コマは両面灰色。</li>
+      <li>灰として置けるのは量子コマだけ(黒や白を裏向きで置くことはできない)。</li>
+      <li>盤が埋まるか、手番の人が置ける場所がなくなったら終わり。表向きの色が多い方の勝ち。同じ数なら引き分け(2社共同で受注)。</li>
+      <li>盤の表示が全部灰色になったら、その時点で終わり。最後に量子コマを置いた人の負け。</li>
+    </ul>
+    <p class="note">ブラボー工房の公式ルールブック(blabokb.com/sr-rule)に合わせてある。</p>
+  </details>
+</div>
+<script src="online.js"></script>
+<script>
+const N = 7, C = 60;
+const svg = document.getElementById('svg');
+const NAME = { B: '黒', W: '白', G: '量子' };
+const FILL = { B: 'var(--blk)', W: 'var(--wht)', G: 'var(--gry)' };
+const DIRS = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+let board, stock, player, color, over, reveal, last, lastQ, allGray;
+
+function reset() {
+  board = Array(N * N).fill(null);
+  const put = (r, c, f, up = true) => board[r * N + c] = { face: f, up };
+  // 公式の初期配置。(2,4)は裏向きの黒、(4,2)は裏向きの白
+  put(2, 3, 'W'); put(2, 4, 'B', false);
+  put(3, 2, 'B'); put(3, 3, 'G'); put(3, 4, 'W');
+  put(4, 2, 'W', false); put(4, 3, 'B');
+  stock = { B: 23, W: 23, G: 7 }; player = 'B'; color = 'B'; over = false; reveal = false; last = -1;
+  lastQ = null; allGray = false;
+  draw();
+}
+const look = p => p.face === 'G' || !p.up ? 'G' : p.face;
+const inside = (r, c) => r >= 0 && r < N && c >= 0 && c < N;
+
+function flips(i, x) {
+  if (board[i]) return [];
+  const r0 = Math.floor(i / N), c0 = i % N, out = [];
+  for (const [dr, dc] of DIRS) {
+    const run = [];
+    let r = r0 + dr, c = c0 + dc;
+    while (inside(r, c) && board[r * N + c] && look(board[r * N + c]) !== x) { run.push(r * N + c); r += dr; c += dc; }
+    if (run.length && inside(r, c) && board[r * N + c] && look(board[r * N + c]) === x) out.push(...run);
+  }
+  return out;
+}
+const legal = x => stock[x] > 0 && board.some((_, i) => flips(i, x).length);
+const anyLegal = () => ['B', 'W', 'G'].some(legal);
+
+function play(i) {
+  const f = flips(i, color);
+  if (!f.length || stock[color] === 0) return;
+  board[i] = { face: color, up: true }; stock[color]--; last = i;
+  if (color === 'G') lastQ = player;
+  for (const j of f) if (board[j].face !== 'G') board[j].up = !board[j].up;
+  player = player === 'B' ? 'W' : 'B';
+  // 盤が全部灰色に見えたら終わり。パスはないので、次の人が置けなくても終わり
+  allGray = board.every(p => !p || look(p) === 'G');
+  if (allGray || !anyLegal()) over = true;
+  if (!legal(color)) color = ['B', 'W', 'G'].find(legal) || color;
+  draw();
+}
+
+function score(x) { return board.filter(p => p && look(p) === x).length; }
+
+function draw() {
+  let s = `<defs>
+    <radialGradient id="pB" cx=".38" cy=".32" r=".7"><stop offset="0" stop-color="#4a4a4a"/><stop offset="1" stop-color="#111"/></radialGradient>
+    <radialGradient id="pW" cx=".38" cy=".32" r=".7"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#dcdcda"/></radialGradient>
+    <radialGradient id="pG" cx=".38" cy=".32" r=".7"><stop offset="0" stop-color="#b0b0b0"/><stop offset="1" stop-color="#7a7a7a"/></radialGradient>
+  </defs><rect width="${N*C}" height="${N*C}" fill="var(--felt)"/>`;
+  for (let k = 1; k < N; k++) {
+    s += `<line x1="${k*C}" y1="0" x2="${k*C}" y2="${N*C}" stroke="#1b1b1b" stroke-opacity=".35" stroke-width="1"/>`;
+    s += `<line x1="0" y1="${k*C}" x2="${N*C}" y2="${k*C}" stroke="#1b1b1b" stroke-opacity=".35" stroke-width="1"/>`;
+  }
+  for (let i = 0; i < N * N; i++) {
+    const x = (i % N) * C + C / 2, y = Math.floor(i / N) * C + C / 2, p = board[i];
+    if (p) {
+      s += `<circle cx="${x + 1.5}" cy="${y + 2.5}" r="24" fill="#000" opacity=".18"/>`;
+      s += `<circle cx="${x}" cy="${y}" r="24" fill="url(#p${look(p)})" stroke="#1b1b1b" stroke-opacity=".5" stroke-width="1"/>`;
+      if (reveal && p.face !== 'G' && !p.up) s += `<circle cx="${x}" cy="${y}" r="9" fill="${FILL[p.face]}"/>`;
+      if (i === last) s += `<circle cx="${x}" cy="${y}" r="27" fill="none" stroke="#1b1b1b" stroke-width="1" stroke-dasharray="3 3"/>`;
+    } else if (!over && flips(i, color).length && stock[color] > 0) {
+      s += `<circle cx="${x}" cy="${y}" r="7" fill="${FILL[color]}" opacity=".6"/>`;
+      s += `<rect x="${x - C/2}" y="${y - C/2}" width="${C}" height="${C}" fill="transparent" data-i="${i}" style="cursor:pointer"/>`;
+    }
+  }
+  svg.innerHTML = s;
+  Online.sync();
+
+  document.getElementById('pick').innerHTML = over ? '' : ['B', 'W', 'G'].map(x =>
+    `<button class="btn ${x === color ? 'on' : ''}" data-c="${x}" ${legal(x) ? '' : 'disabled'}>
+      <span class="chip" style="background:${FILL[x]}"></span>${NAME[x]} ${stock[x]}</button>`).join('');
+
+  const t = document.getElementById('turn');
+  const b = score('B'), w = score('W');
+  if (over) {
+    t.className = 'turn win';
+    if (allGray) {
+      const loser = lastQ;
+      t.innerHTML = loser ? `盤が全部灰色になった。最後に量子コマを置いた${NAME[loser]}の負け` : '盤が全部灰色になった。引き分け';
+    } else t.innerHTML = b === w ? `引き分け(黒${b} / 白${w})。2社共同で受注` : `<span class="dot" style="background:${FILL[b > w ? 'B' : 'W']};border:1.5px solid var(--ink)"></span>${b > w ? '黒' : '白'}の勝ち(黒${b} / 白${w})`;
+  } else {
+    t.className = 'turn';
+    t.innerHTML = `<span class="dot" style="background:${FILL[player]};border:1.5px solid var(--ink)"></span>${NAME[player]}の番　置く色を下で選ぶ`;
+  }
+  document.getElementById('info').textContent = reveal
+    ? `小さい丸が、裏返って灰色に見えているコマの本当の色。表向きの黒${b} / 白${w}`
+    : '得点は最後まで見えない。答え合わせを押すと、裏返ったコマの本当の色が見える(対戦中は押さないこと)。';
+  document.getElementById('reveal').classList.toggle('on', reveal);
+}
+
+svg.addEventListener('click', e => { if (!Online.canAct()) return; const i = e.target.dataset.i; if (i !== undefined && !over) play(+i); });
+document.getElementById('pick').addEventListener('click', e => {
+  const b = e.target.closest('[data-c]'); if (b && !b.disabled) { color = b.dataset.c; draw(); }
+});
+document.getElementById('reveal').onclick = () => { reveal = !reveal; draw(); };
+document.getElementById('reset').onclick = reset;
+Online.init({ game: 'reversi', names: ['黒', '白'],
+  getState: () => ({ board, stock, player, over, last, lastQ, allGray }),
+  setState: s => { ({ board, stock, player, over, last, lastQ, allGray } = s); if (!legal(color)) color = ['B', 'W', 'G'].find(legal) || color; draw(); },
+  turn: () => over ? null : player === 'B' ? 0 : 1 });
+reset();
+</script>
+</body>
+</html>

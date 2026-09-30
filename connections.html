@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>橋つなぎ</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  /* 木の机・黒い盤・赤とクリームの突起・八角形のタイル */
+  :root, :root:not([data-theme="light"]) {
+    --ink: #2a1c10; --sub: #5a4330; --p1: #d7263d; --p2: #efe3c2;
+  }
+  body {
+    background-color: #c8955c;
+    background-image:
+      repeating-linear-gradient(91deg, rgba(90,50,15,.10) 0 2px, transparent 2px 13px),
+      repeating-linear-gradient(89deg, rgba(255,235,200,.10) 0 1px, transparent 1px 37px),
+      linear-gradient(90deg, #c38c52, #d6a66c 40%, #c99358 70%, #bf884e);
+  }
+  .frame {
+    background: #151515; border-radius: 8px; padding: 6px;
+    box-shadow: 0 8px 18px rgba(60,30,5,.4), inset 0 0 0 3px #2b2b2b;
+  }
+  .frame svg { display: block; width: 100%; height: auto; touch-action: manipulation; user-select: none; }
+  .dot.p2 { box-shadow: inset 0 0 0 1.5px #2a1c10; }
+  .cell { cursor: pointer; }
+  .cell .pre { opacity: 0; }
+  .cell:hover .pre { opacity: .45; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="index.html">← ゲーム一覧</a><h1>橋つなぎ</h1></div>
+  <p class="turn" id="turn"></p>
+  <div class="frame"><svg id="svg" viewBox="0 -26 440 492"></svg></div>
+  <div class="bar"><button class="btn" id="reset">最初から</button></div>
+  <details class="rules" open>
+    <summary>ルール(Connections / Gymkhana と同じ仕組み)</summary>
+    <ul>
+      <li>赤は上から下へ、白は左から右へ、自分の色の突起をタイルでつなげたら勝ち。</li>
+      <li>交代で1枚ずつ、となり合う自分の突起どうしの間にタイルを置く。すき間をタップすると置ける。</li>
+      <li>橋は交差できない。相手の橋がある所には置けないので、うまく道をふさぐ。</li>
+    </ul>
+  </details>
+</div>
+<script src="online.js"></script>
+<script>
+const L = 11, G = 40, M = 20;
+const svg = document.getElementById('svg');
+const NAME = ['赤', '白'];
+let bridge, player, winner, win;
+
+function reset() { bridge = {}; player = 0; winner = null; win = []; draw(); }
+
+const X = v => M + v * G;
+// マス(r,c)に player p がかける橋の両端
+function ends(r, c, p) {
+  const vertical = (r % 2 === 1) === (p === 0);
+  return vertical ? [[r - 1, c], [r + 1, c]] : [[r, c - 1], [r, c + 1]];
+}
+
+function connected(p) {
+  const isDot = (r, c) => p === 0 ? r % 2 === 0 && c % 2 === 1 : r % 2 === 1 && c % 2 === 0;
+  const adj = {};
+  for (const k in bridge) if (bridge[k] === p) {
+    const [r, c] = k.split(',').map(Number), [a, b] = ends(r, c, p);
+    (adj[a] ??= []).push(b.join()); (adj[b] ??= []).push(a.join());
+  }
+  const start = [];
+  for (let i = 0; i < L; i++) if (p === 0 ? isDot(0, i) : isDot(i, 0)) start.push(p === 0 ? `0,${i}` : `${i},0`);
+  const prev = {}, q = [...start];
+  start.forEach(s => prev[s] = null);
+  while (q.length) {
+    const cur = q.shift(), [r, c] = cur.split(',').map(Number);
+    if ((p === 0 ? r : c) === L - 1) {
+      const path = []; for (let x = cur; x; x = prev[x]) path.push(x); return path;
+    }
+    for (const n of adj[cur] || []) if (!(n in prev)) { prev[n] = cur; q.push(n); }
+  }
+  return null;
+}
+
+function play(r, c) {
+  if (winner !== null || bridge[`${r},${c}`] !== undefined) return;
+  bridge[`${r},${c}`] = player;
+  const path = connected(player);
+  if (path) { winner = player; win = path; } else player = 1 - player;
+  draw();
+}
+
+// 八角形のタイルに、つなぐ向きの線が入ったもの
+const OCT = Array.from({ length: 8 }, (_, k) => {
+  const a = Math.PI / 8 + k * Math.PI / 4;
+  return `${(Math.cos(a) * 19).toFixed(1)},${(Math.sin(a) * 19).toFixed(1)}`;
+}).join(' ');
+function tile(r, c, p, cls = '') {
+  const [a] = ends(r, c, p), vertical = a[1] === c;
+  const col = p ? 'var(--p2)' : 'var(--p1)';
+  return `<g ${cls} transform="translate(${X(c)},${X(r)})">
+    <polygon points="${OCT}" transform="translate(1.5,2.5)" fill="#000" opacity=".45"/>
+    <polygon points="${OCT}" fill="#242424" stroke="#3a3a3a" stroke-width="1.2"/>
+    <rect x="${vertical ? -4.5 : -17.5}" y="${vertical ? -17.5 : -4.5}" width="${vertical ? 9 : 35}" height="${vertical ? 35 : 9}" fill="${col}"/>
+  </g>`;
+}
+
+function draw() {
+  let s = `<rect x="0" y="-26" width="440" height="492" fill="#1a1a1a"/>`;
+  for (const y of [-22, 444]) {
+    s += `<rect x="170" y="${y}" width="100" height="18" rx="3" fill="var(--p1)"/>
+      <text x="220" y="${y + 13.5}" fill="#fff" font-size="12" font-weight="800" text-anchor="middle" letter-spacing="2">橋つなぎ</text>`;
+  }
+  for (const k in bridge) {
+    const [r, c] = k.split(',').map(Number);
+    s += tile(r, c, bridge[k]);
+  }
+  for (let r = 0; r < L; r++) for (let c = 0; c < L; c++) {
+    const red = r % 2 === 0 && c % 2 === 1, blue = r % 2 === 1 && c % 2 === 0;
+    if (red || blue) {
+      const onPath = win.includes(`${r},${c}`), h = onPath ? 8 : 6;
+      s += `<rect x="${X(c) - h}" y="${X(r) - h}" width="${h * 2}" height="${h * 2}" rx="1.5" fill="var(--${red ? 'p1' : 'p2'})"
+        ${onPath ? 'stroke="#fff" stroke-width="2"' : ''}/>`;
+    }
+    const playable = r >= 1 && r <= 9 && c >= 1 && c <= 9 && (r + c) % 2 === 0;
+    if (playable && winner === null && bridge[`${r},${c}`] === undefined) {
+      s += `<g class="cell" data-r="${r}" data-c="${c}">${tile(r, c, player, 'class="pre"')}
+        <rect x="${X(c) - 18}" y="${X(r) - 18}" width="36" height="36" fill="transparent"/></g>`;
+    }
+  }
+  svg.innerHTML = s;
+  Online.sync();
+  const t = document.getElementById('turn'), who = winner ?? player;
+  t.className = 'turn' + (winner !== null ? ' win' : '');
+  t.innerHTML = `<span class="dot ${who ? 'p2' : 'p1'}"></span>` +
+    (winner !== null ? `${NAME[winner]}の勝ち` : `${NAME[player]}の番(${player ? '左から右へ' : '上から下へ'})`);
+}
+
+svg.addEventListener('click', e => {
+  if (!Online.canAct()) return;
+  const g = e.target.closest('.cell');
+  if (g) play(+g.dataset.r, +g.dataset.c);
+});
+document.getElementById('reset').onclick = reset;
+Online.init({ game: 'connections', names: NAME,
+  getState: () => ({ bridge, player, winner, win }),
+  setState: s => { ({ bridge, player, winner, win } = s); draw(); },
+  turn: () => winner === null ? player : null });
+reset();
+</script>
+</body>
+</html>

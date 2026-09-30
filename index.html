@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ここのゲーム部屋</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  header { padding: 32px 0 20px; }
+  header h1 { font-size: 34px; font-weight: 800; margin: 0; letter-spacing: .02em; }
+  header p { margin: 6px 0 0; color: var(--sub); }
+  .shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+  .game {
+    display: block; text-decoration: none; background: var(--board);
+    border-radius: 14px; padding: 14px; box-shadow: 0 2px 0 var(--line);
+  }
+  .game svg { display: block; width: 100%; height: auto; margin-bottom: 10px; }
+  .game h2 { font-size: 18px; margin: 0; }
+  .game p { font-size: 14px; color: var(--sub); margin: 4px 0 0; }
+  .game:hover h2 { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>ゲーム部屋</h1>
+    <p>保存してたボドゲを、ブラウザで遊べるようにした。1台を2人で交代して使ってもいいし、ゲームの画面で「部屋を作る」を押せば、友達と別々の端末でオンライン対戦もできる。</p>
+  </header>
+  <div class="shelf">
+
+    <a class="game" href="kieru-sanmoku.html">
+      <svg viewBox="0 0 120 80">
+        <rect x="28" y="2" width="64" height="72" rx="16" fill="#ef7f1a"/><rect x="28" y="0" width="64" height="70" rx="16" fill="#f5c518"/>
+        <rect x="34" y="6" width="52" height="58" rx="10" fill="#111"/>
+        <g stroke="#9fdcff" stroke-width="1.6" stroke-linecap="round"><line x1="52" y1="12" x2="52" y2="58"/><line x1="68" y1="12" x2="68" y2="58"/><line x1="39" y1="27" x2="81" y2="27"/><line x1="39" y1="43" x2="81" y2="43"/></g>
+        <g stroke="#ff4040" stroke-width="3" stroke-linecap="round"><path d="M40 13l7 8M47 13l-7 8"/><path d="M56 30l8 8M64 30l-8 8" opacity=".3"/></g>
+        <circle cx="76" cy="51" r="4.5" fill="none" stroke="#3d7dff" stroke-width="3"/>
+      </svg>
+      <h2>消える三目並べ</h2>
+      <p>印は3つまで。4つ目で一番古いのが消える。</p>
+    </a>
+
+    <a class="game" href="barricade.html">
+      <svg viewBox="0 0 120 80">
+        <rect x="18" y="0" width="84" height="80" rx="6" fill="#111"/>
+        <g fill="#2a2a2a">
+          <rect x="24" y="30" width="20" height="20" rx="2"/><rect x="50" y="30" width="20" height="20" rx="2"/><rect x="76" y="30" width="20" height="20" rx="2"/></g>
+        <g fill="#5a2427"><rect x="24" y="4" width="20" height="20" rx="2"/><rect x="50" y="4" width="20" height="20" rx="2"/><rect x="76" y="4" width="20" height="20" rx="2"/></g>
+        <g fill="#22345a"><rect x="24" y="56" width="20" height="20" rx="2"/><rect x="50" y="56" width="20" height="20" rx="2"/><rect x="76" y="56" width="20" height="20" rx="2"/></g>
+        <rect x="24" y="25" width="46" height="4" rx="2" fill="#e6e6e6"/>
+        <rect x="71" y="30" width="4" height="46" rx="2" fill="#e6e6e6"/>
+        <circle cx="60" cy="14" r="6" fill="#3b82f6"/><circle cx="60" cy="66" r="6" fill="#e5484d"/>
+      </svg>
+      <h2>バリケード</h2>
+      <p>壁で相手の道をふさぎながら、反対側まで進む。</p>
+    </a>
+
+    <a class="game" href="vidro.html">
+      <svg viewBox="0 0 120 80">
+        <defs><radialGradient id="mr" cx=".35" cy=".3" r=".75"><stop offset="0" stop-color="#ff8a80"/><stop offset=".4" stop-color="#e01b1b"/><stop offset="1" stop-color="#6a0000"/></radialGradient>
+        <radialGradient id="my" cx=".35" cy=".3" r=".75"><stop offset="0" stop-color="#fff1a8"/><stop offset=".4" stop-color="#f7b60a"/><stop offset="1" stop-color="#8a4f00"/></radialGradient></defs>
+        <rect x="20" y="0" width="80" height="80" rx="4" fill="#262626"/><rect x="25" y="5" width="70" height="70" fill="#f6f6f3"/>
+        <g stroke="#9a9a9a" stroke-width=".8"><path d="M39 5V75M53 5V75M67 5V75M81 5V75M25 19H95M25 33H95M25 47H95M25 61H95"/></g>
+        <circle cx="32" cy="12" r="6" fill="url(#mr)"/><circle cx="88" cy="12" r="6" fill="url(#my)"/>
+        <circle cx="60" cy="40" r="6" fill="url(#my)"/><circle cx="32" cy="40" r="6" fill="url(#mr)"/><circle cx="74" cy="68" r="6" fill="url(#mr)"/>
+      </svg>
+      <h2>はじく三目並べ</h2>
+      <p>おはじきを弾いてぶつけて、3つそろえる。</p>
+    </a>
+
+    <a class="game" href="gray-reversi.html">
+      <svg viewBox="0 0 120 80">
+        <rect x="20" y="0" width="80" height="40" fill="#1b1b1b"/><rect x="20" y="40" width="80" height="40" fill="#fbfbfa"/>
+        <circle cx="44" cy="40" r="8" fill="#1b1b1b"/><circle cx="76" cy="40" r="8" fill="#fbfbfa" stroke="#1b1b1b" stroke-width="1"/>
+        <g fill="none" stroke="#8f8f8f" stroke-width="1"><ellipse cx="60" cy="40" rx="9" ry="3.5"/><ellipse cx="60" cy="40" rx="9" ry="3.5" transform="rotate(60 60 40)"/><ellipse cx="60" cy="40" rx="9" ry="3.5" transform="rotate(-60 60 40)"/></g>
+        <circle cx="60" cy="40" r="2" fill="#8f8f8f"/>
+      </svg>
+      <h2>灰色リバーシ</h2>
+      <p>灰色が混ざったオセロ。どれが自分の色か覚えておく。</p>
+    </a>
+
+    <a class="game" href="connections.html">
+      <svg viewBox="0 0 120 80">
+        <rect x="20" y="0" width="80" height="80" rx="4" fill="#1a1a1a"/>
+        <polygon points="36.5,10 43.5,10 48,14.5 48,21.5 43.5,26 36.5,26 32,21.5 32,14.5" fill="#242424" stroke="#3a3a3a"/><rect x="38.5" y="11" width="3" height="14" fill="#d7263d"/>
+        <polygon points="56.5,32 63.5,32 68,36.5 68,43.5 63.5,48 56.5,48 52,43.5 52,36.5" fill="#242424" stroke="#3a3a3a"/><rect x="53" y="38.5" width="14" height="3" fill="#efe3c2"/>
+        <g fill="#d7263d"><rect x="37" y="7" width="6" height="6"/><rect x="77" y="7" width="6" height="6"/><rect x="37" y="23" width="6" height="6"/><rect x="77" y="23" width="6" height="6"/><rect x="37" y="51" width="6" height="6"/><rect x="77" y="51" width="6" height="6"/><rect x="37" y="67" width="6" height="6"/><rect x="77" y="67" width="6" height="6"/></g>
+        <g fill="#efe3c2"><rect x="27" y="37" width="6" height="6"/><rect x="47" y="37" width="6" height="6"/><rect x="67" y="37" width="6" height="6"/><rect x="87" y="37" width="6" height="6"/><rect x="57" y="15" width="6" height="6"/><rect x="57" y="59" width="6" height="6"/></g>
+      </svg>
+      <h2>橋つなぎ</h2>
+      <p>自分の点を橋でつないで、盤の端から端へ。</p>
+    </a>
+
+    <a class="game" href="jintori.html">
+      <svg viewBox="0 0 120 80">
+        <rect x="4" y="12" width="112" height="56" rx="2" fill="#fdfdfb"/>
+        <g fill="none" stroke="#2b2b2b" stroke-width="1"><circle cx="60" cy="40" r="15"/><path d="M45 40H75M60 25V55M22 21L14 59M18 40H45M98 21L106 59M102 40H75"/></g>
+        <g fill="#6b3fd4"><circle cx="22" cy="21" r="5"/><circle cx="14" cy="59" r="5"/><circle cx="45" cy="40" r="5"/></g>
+        <g fill="#e8391f"><circle cx="98" cy="21" r="5"/><circle cx="102" cy="40" r="5"/><circle cx="106" cy="59" r="5"/></g>
+      </svg>
+      <h2>陣とりゲーム</h2>
+      <p>3つの駒を1マスずつ進めて、相手の陣地と入れ替える。</p>
+    </a>
+
+    <a class="game" href="black-hole.html">
+      <svg viewBox="0 0 120 80">
+        <rect x="24" y="0" width="72" height="80" rx="2" fill="#f4f8fa"/>
+        <g fill="none" stroke="#333" stroke-width="1"><circle cx="60" cy="14" r="6"/><circle cx="53" cy="28" r="6"/><circle cx="67" cy="28" r="6"/><circle cx="46" cy="42" r="6"/><circle cx="60" cy="42" r="6"/><circle cx="74" cy="42" r="6"/><circle cx="39" cy="56" r="6"/><circle cx="53" cy="56" r="6"/><circle cx="67" cy="56" r="6"/><circle cx="81" cy="56" r="6"/></g>
+        <circle cx="60" cy="42" r="5.5" fill="#d8344a" opacity=".85"/>
+        <g font-size="8" text-anchor="middle" font-family="sans-serif"><text x="60" y="17" fill="#d8344a">2</text><text x="53" y="31" fill="#2c56b8">6</text><text x="67" y="31" fill="#d8344a">7</text><text x="46" y="45" fill="#2c56b8">1</text><text x="74" y="45" fill="#2c56b8">3</text><text x="53" y="59" fill="#d8344a">5</text><text x="67" y="59" fill="#2c56b8">8</text></g>
+      </svg>
+      <h2>ブラックホール</h2>
+      <p>数字を書くだけ。最後に残ったマスのまわりで点数勝負。</p>
+    </a>
+
+    <a class="game" href="liar.html">
+      <svg viewBox="0 0 120 80">
+        <rect x="10" y="4" width="100" height="72" rx="6" fill="#121212"/>
+        <g transform="rotate(-10 44 40)"><rect x="30" y="16" width="28" height="40" rx="4" fill="#fafafa"/><text x="44" y="44" text-anchor="middle" font-size="22" font-weight="800" font-family="Georgia,serif" fill="#111">3</text></g>
+        <g transform="rotate(8 76 40)"><rect x="62" y="18" width="28" height="40" rx="4" fill="#7a1f25" stroke="#ddd"/></g>
+        <text x="96" y="22" font-size="16" font-weight="800" fill="#e8c547">9?</text>
+      </svg>
+      <h2>うそつき宣言</h2>
+      <p>伏せたカードの数を宣言。信じるか、ダウトか。</p>
+    </a>
+
+    <a class="game" href="sugoroku.html">
+      <svg viewBox="0 0 120 80">
+        <rect x="10" y="4" width="100" height="72" rx="6" fill="#14172b"/>
+        <g fill="#262b4d" stroke="#4a5190"><rect x="18" y="14" width="16" height="16" rx="3"/><rect x="38" y="14" width="16" height="16" rx="3"/><rect x="58" y="14" width="16" height="16" rx="3" fill="#3b3f6e"/><rect x="78" y="14" width="16" height="16" rx="3"/><rect x="78" y="34" width="16" height="16" rx="3"/><rect x="58" y="34" width="16" height="16" rx="3"/><rect x="38" y="34" width="16" height="16" rx="3" fill="#3b3f6e"/><rect x="18" y="34" width="16" height="16" rx="3"/><rect x="18" y="54" width="16" height="16" rx="3"/><rect x="38" y="54" width="16" height="16" rx="3"/></g>
+        <circle cx="46" cy="22" r="5" fill="#ff6b6b" stroke="#fff" stroke-width="1.5"/>
+        <circle cx="66" cy="42" r="5" fill="none" stroke="#4dabf7" stroke-width="1.5" stroke-dasharray="2 2"/>
+        <text x="66" y="25" text-anchor="middle" font-size="9" fill="#ffd43b">★</text><text x="86" y="45" text-anchor="middle" font-size="10">⚠</text>
+      </svg>
+      <h2>だましあいすごろく</h2>
+      <p>相手の場所は見えない。ワナを置いて先にゴールへ。</p>
+    </a>
+
+    <a class="game" href="sousaku.html">
+      <svg viewBox="0 0 120 80">
+        <rect x="14" y="4" width="92" height="72" rx="4" fill="#6b4a2b"/><rect x="20" y="8" width="38" height="64" fill="#f3e9d2"/><rect x="62" y="8" width="38" height="64" fill="#f3e9d2"/>
+        <g stroke="#7a6545" stroke-width="1.5"><line x1="25" y1="18" x2="53" y2="18"/><line x1="25" y1="26" x2="50" y2="26"/><line x1="25" y1="34" x2="53" y2="34"/></g>
+        <g fill="none" stroke="#8c2f1b" stroke-width="1.5"><circle cx="81" cy="18" r="5"/><path d="M81 23V34M81 34L70 46M81 34L92 46"/><circle cx="70" cy="52" r="5"/><circle cx="92" cy="52" r="5"/></g>
+      </svg>
+      <h2>ゼロから物語</h2>
+      <p>キャラもアイテムも自分で作って、エンドを増やしていく。</p>
+    </a>
+
+    <a class="game" href="nazo.html">
+      <svg viewBox="0 0 120 80">
+        <rect x="10" y="4" width="100" height="72" rx="6" fill="#1d2b24"/>
+        <g transform="rotate(-6 40 40)"><rect x="20" y="22" width="40" height="30" rx="2" fill="#efe6cf"/><path d="M20 22L40 40L60 22" fill="none" stroke="#b8a67a" stroke-width="1.5"/><circle cx="40" cy="40" r="4" fill="#c0392b"/></g>
+        <g transform="rotate(6 80 40)"><rect x="60" y="22" width="40" height="30" rx="2" fill="#efe6cf"/><path d="M60 22L80 40L100 22" fill="none" stroke="#b8a67a" stroke-width="1.5"/><circle cx="80" cy="40" r="4" fill="#2c6e9b"/></g>
+        <text x="60" y="70" text-anchor="middle" font-size="12" font-weight="800" fill="#efe6cf">?</text>
+      </svg>
+      <h2>ふたりで謎解き</h2>
+      <p>ヒントは1人1枚ずつ。2人そろわないと解けない。</p>
+    </a>
+
+    <a class="game" href="block-art.html">
+      <svg viewBox="0 0 120 80">
+        <rect x="20" y="0" width="80" height="80" fill="#6b4a2e"/><rect x="20" y="0" width="80" height="10" fill="#5c9e31"/>
+        <g><rect x="30" y="16" width="10" height="10" fill="#3aafd9"/><rect x="40" y="16" width="10" height="10" fill="#3aafd9"/><rect x="50" y="16" width="10" height="10" fill="#f8c527"/><rect x="60" y="16" width="10" height="10" fill="#f8c527"/><rect x="70" y="16" width="10" height="10" fill="#3aafd9"/><rect x="80" y="16" width="10" height="10" fill="#3aafd9"/>
+        <rect x="30" y="26" width="10" height="10" fill="#3aafd9"/><rect x="40" y="26" width="10" height="10" fill="#f8c527"/><rect x="50" y="26" width="10" height="10" fill="#f8c527"/><rect x="60" y="26" width="10" height="10" fill="#f8c527"/><rect x="70" y="26" width="10" height="10" fill="#f8c527"/><rect x="80" y="26" width="10" height="10" fill="#3aafd9"/>
+        <rect x="30" y="36" width="10" height="10" fill="#a02722"/><rect x="40" y="36" width="10" height="10" fill="#a02722"/><rect x="50" y="36" width="10" height="10" fill="#8e8e86"/><rect x="60" y="36" width="10" height="10" fill="#8e8e86"/><rect x="70" y="36" width="10" height="10" fill="#8e8e86"/><rect x="80" y="36" width="10" height="10" fill="#8e8e86"/>
+        <rect x="30" y="46" width="60" height="20" fill="#546d1b"/></g>
+      </svg>
+      <h2>写真をブロック絵に</h2>
+      <p>おまけ。写真を羊毛ブロックのドット絵にして、材料の数も出す。</p>
+    </a>
+
+  </div>
+</div>
+</body>
+</html>

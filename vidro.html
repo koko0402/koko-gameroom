@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>はじく三目並べ</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  /* 木の机・黒い枠・白い盤・ガラスのおはじき */
+  :root, :root:not([data-theme="light"]) {
+    --ink: #2a1c10; --sub: #5a4330; --p1: #d61a1a; --p2: #f0a800; --line: #7a5a3a;
+  }
+  body {
+    background-color: #c8955c;
+    background-image:
+      repeating-linear-gradient(91deg, rgba(90,50,15,.10) 0 2px, transparent 2px 13px),
+      repeating-linear-gradient(89deg, rgba(255,235,200,.10) 0 1px, transparent 1px 37px),
+      linear-gradient(90deg, #c38c52, #d6a66c 40%, #c99358 70%, #bf884e);
+  }
+  .frame {
+    background: #262626; border-radius: 10px; padding: 10px;
+    box-shadow: 0 6px 16px rgba(60,30,5,.35), inset 0 1px 0 rgba(255,255,255,.12);
+  }
+  .frame svg { display: block; width: 100%; height: auto; touch-action: manipulation; user-select: none; }
+  .arrow { fill: #222; cursor: pointer; }
+  .hand { display: inline-flex; gap: 3px; vertical-align: middle; margin-left: 4px; }
+  .hand i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="index.html">← ゲーム一覧</a><h1>はじく三目並べ</h1></div>
+  <p class="turn" id="turn"></p>
+  <div class="frame"><svg id="svg" viewBox="-36 -36 536 536"></svg></div>
+  <div class="bar"><button class="btn" id="reset">最初から</button></div>
+  <p class="note" id="info"></p>
+  <details class="rules" open>
+    <summary>ルール(VIDRO / ビードロ を元にしたもの)</summary>
+    <ul>
+      <li>5×5の盤、おはじきは1人5個。縦・横・斜めに3つそろえたら勝ち。</li>
+      <li>自分の番は「置く」か「はじく」のどちらか。</li>
+      <li>置く: 自分のおはじきのまわり8マスには置けない。置ける場所は色がつく。</li>
+      <li>はじく: 自分のおはじきをタップして、8方向の矢印から選ぶ。壁まで止まらずに滑る。</li>
+      <li>他のおはじきにぶつかると、ぶつけた方はその場で止まり、ぶつかられた方が同じ向きに滑り出す(相手のでも動く)。</li>
+      <li>動いた結果、相手の3つがそろったら相手の勝ち。両方そろったら動かした人の勝ち。</li>
+      <li>前と同じ並びに戻る手は打てない(千日手なし)。</li>
+    </ul>
+  </details>
+</div>
+<script src="online.js"></script>
+<script>
+const N = 5, CELL = 100, PIECES = 5;
+const svg = document.getElementById('svg');
+const NAME = ['赤', '黄'];
+const DIRS = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+let board, hand, player, winner, sel, seen;
+
+function reset() {
+  board = Array(N * N).fill(-1); hand = [PIECES, PIECES]; player = 0; winner = null; sel = null;
+  seen = new Set([key(board)]);
+  draw();
+}
+const key = b => b.join('');
+const inside = (r, c) => r >= 0 && r < N && c >= 0 && c < N;
+
+function canPlace(b, p, i) {
+  if (b[i] !== -1) return false;
+  const r = Math.floor(i / N), c = i % N;
+  for (const [dr, dc] of DIRS) {
+    const nr = r + dr, nc = c + dc;
+    if (inside(nr, nc) && b[nr * N + nc] === p) return false;
+  }
+  return true;
+}
+
+// はじいた結果の盤面を返す。何も動かなければ null
+function flick(b, i, dr, dc) {
+  const nb = b.slice();
+  let r = Math.floor(i / N), c = i % N, moved = false;
+  for (;;) {
+    const nr = r + dr, nc = c + dc;
+    if (!inside(nr, nc)) break;
+    const j = nr * N + nc;
+    if (nb[j] === -1) { nb[j] = nb[r * N + c]; nb[r * N + c] = -1; moved = true; }
+    r = nr; c = nc;   // 空きなら自分が進む、埋まってればぶつかった相手が次に動く
+  }
+  return moved ? nb : null;
+}
+
+function hasLine(b, p) {
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++)
+    for (const [dr, dc] of [[0,1],[1,0],[1,1],[1,-1]]) {
+      let ok = true;
+      for (let k = 0; k < 3; k++) {
+        const nr = r + dr * k, nc = c + dc * k;
+        if (!inside(nr, nc) || b[nr * N + nc] !== p) { ok = false; break; }
+      }
+      if (ok) return true;
+    }
+  return false;
+}
+
+// p が打てる手をすべて列挙
+function actions(p) {
+  const out = [];
+  if (hand[p] > 0) for (let i = 0; i < N * N; i++) if (canPlace(board, p, i)) {
+    const nb = board.slice(); nb[i] = p; out.push({ type: 'place', i, nb });
+  }
+  for (let i = 0; i < N * N; i++) if (board[i] === p)
+    for (const [dr, dc] of DIRS) {
+      const nb = flick(board, i, dr, dc);
+      if (nb && !seen.has(key(nb))) out.push({ type: 'flick', i, dr, dc, nb });
+    }
+  return out;
+}
+
+function apply(a) {
+  board = a.nb; seen.add(key(board)); sel = null;
+  if (a.type === 'place') hand[player]--;
+  const me = hasLine(board, player), them = hasLine(board, 1 - player);
+  if (me) winner = player; else if (them) winner = 1 - player;
+  else {
+    player = 1 - player;
+    if (actions(player).length === 0) player = 1 - player; // 打てる手がなければパス
+  }
+  draw();
+}
+
+function reach(p) {
+  const save = player; player = p;
+  const r = actions(p).some(a => hasLine(a.nb, p));
+  player = save; return r;
+}
+
+const DEFS = `<defs>
+  <radialGradient id="g0" cx=".35" cy=".3" r=".75">
+    <stop offset="0" stop-color="#ff8a80"/><stop offset=".35" stop-color="#e01b1b"/><stop offset=".8" stop-color="#9c0505"/><stop offset="1" stop-color="#6a0000"/>
+  </radialGradient>
+  <radialGradient id="g1" cx=".35" cy=".3" r=".75">
+    <stop offset="0" stop-color="#fff1a8"/><stop offset=".35" stop-color="#f7b60a"/><stop offset=".8" stop-color="#c97a00"/><stop offset="1" stop-color="#8a4f00"/>
+  </radialGradient>
+  <radialGradient id="shade" cx=".5" cy=".5" r=".5">
+    <stop offset="0" stop-color="#000" stop-opacity=".28"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+  </radialGradient>
+</defs>`;
+
+// マスの中のキラッとした線
+function star(cx, cy) {
+  let d = '';
+  for (let k = 0; k < 8; k++) {
+    const a = k * Math.PI / 4, len = k % 2 ? 34 : 44;
+    d += `M${cx} ${cy}L${(cx + Math.cos(a) * len).toFixed(1)} ${(cy + Math.sin(a) * len).toFixed(1)}`;
+  }
+  return `<path d="${d}" stroke="#b8b8b8" stroke-width="1" fill="none"/>`;
+}
+
+function marble(cx, cy, p, big) {
+  const r = big ? 33 : 30;
+  return `<ellipse cx="${cx + 4}" cy="${cy + 8}" rx="${r}" ry="${r * 0.8}" fill="url(#shade)"/>
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="url(#g${p})"/>
+    <ellipse cx="${cx - r * 0.35}" cy="${cy - r * 0.42}" rx="${r * 0.32}" ry="${r * 0.2}" fill="#fff" opacity=".75" transform="rotate(-30 ${cx - r * 0.35} ${cy - r * 0.42})"/>
+    <circle cx="${cx + r * 0.3}" cy="${cy + r * 0.35}" r="${r * 0.18}" fill="#fff" opacity=".18"/>`;
+}
+
+function draw() {
+  const acts = winner === null ? actions(player) : [];
+  let s = DEFS + `<rect x="-36" y="-36" width="536" height="536" fill="#262626"/>`;
+  'ABCDE'.split('').forEach((ch, k) => s += `<text x="${k * CELL + 50}" y="-12" fill="#eee" font-size="22" font-weight="700" text-anchor="middle">${ch}</text>`);
+  for (let k = 0; k < N; k++) s += `<text x="-18" y="${k * CELL + 58}" fill="#eee" font-size="22" font-weight="700" text-anchor="middle">${k + 1}</text>`;
+  s += `<rect x="0" y="0" width="500" height="500" fill="#f6f6f3"/>`;
+  for (let i = 0; i < N * N; i++) {
+    const x = (i % N) * CELL, y = Math.floor(i / N) * CELL;
+    const placeable = sel === null && acts.some(a => a.type === 'place' && a.i === i);
+    s += `<rect x="${x}" y="${y}" width="${CELL}" height="${CELL}" fill="${placeable ? (player ? '#fcefc8' : '#fbd9d6') : '#f6f6f3'}"
+      stroke="#9a9a9a" stroke-width="1.5" data-i="${i}" style="cursor:pointer"/>`;
+    s += `<g pointer-events="none">${star(x + 50, y + 50)}</g>`;
+  }
+  for (let i = 0; i < N * N; i++) if (board[i] !== -1) {
+    const x = (i % N) * CELL, y = Math.floor(i / N) * CELL;
+    s += `<g data-i="${i}" style="cursor:pointer">${marble(x + 50, y + 50, board[i], sel === i)}
+      <circle cx="${x + 50}" cy="${y + 50}" r="34" fill="transparent" data-i="${i}" ${sel === i ? 'stroke="#222" stroke-width="3" stroke-dasharray="6 5"' : ''}/></g>`;
+  }
+  if (sel !== null) {
+    const cx = (sel % N) * CELL + 50, cy = Math.floor(sel / N) * CELL + 50;
+    for (const a of acts) if (a.type === 'flick' && a.i === sel) {
+      const ang = Math.atan2(a.dr, a.dc), ax = cx + Math.cos(ang) * 52, ay = cy + Math.sin(ang) * 52;
+      s += `<g transform="translate(${ax},${ay}) rotate(${ang * 180 / Math.PI})">
+        <circle r="17" fill="#fff" stroke="#222" stroke-width="2" data-d="${a.dr},${a.dc}" style="cursor:pointer"/>
+        <path class="arrow" d="M-9,-9 L9,0 L-9,9 Z" data-d="${a.dr},${a.dc}"/></g>`;
+    }
+  }
+  svg.innerHTML = s;
+  Online.sync();
+  const t = document.getElementById('turn');
+  const who = winner ?? player;
+  t.className = 'turn' + (winner !== null ? ' win' : '');
+  let msg = winner !== null ? `${NAME[winner]}の勝ち` : `${NAME[player]}の番`;
+  if (winner === null) { const r = [0, 1].filter(reach); if (r.length) msg += `　リーチ: ${r.map(p => NAME[p]).join('・')}`; }
+  t.innerHTML = `<span class="dot ${who ? 'p2' : 'p1'}"></span>${msg}`;
+  const dots = (p) => {
+    const g = p ? '#fff1a8,#f7b60a 45%,#8a4f00' : '#ff8a80,#e01b1b 45%,#6a0000';
+    return `<span class="hand">${`<i style="background:radial-gradient(circle at 35% 30%,${g})"></i>`.repeat(hand[p])}</span>`;
+  };
+  document.getElementById('info').innerHTML = `手元のおはじき　赤${dots(0)}　黄${dots(1)}`;
+}
+
+svg.addEventListener('click', e => {
+  if (winner !== null || !Online.canAct()) return;
+  const d = e.target.dataset;
+  if (d.d) {
+    const [dr, dc] = d.d.split(',').map(Number);
+    const a = actions(player).find(a => a.type === 'flick' && a.i === sel && a.dr === dr && a.dc === dc);
+    if (a) apply(a);
+    return;
+  }
+  if (d.i === undefined) return;
+  const i = +d.i;
+  if (board[i] === player) { sel = sel === i ? null : i; draw(); return; }
+  if (sel !== null) { sel = null; draw(); return; }
+  const a = actions(player).find(a => a.type === 'place' && a.i === i);
+  if (a) apply(a);
+});
+document.getElementById('reset').onclick = reset;
+Online.init({ game: 'vidro', names: NAME,
+  getState: () => ({ board, hand, player, winner, seen: [...seen] }),
+  setState: s => { ({ board, hand, player, winner } = s); seen = new Set(s.seen); sel = null; draw(); },
+  turn: () => winner === null ? player : null });
+reset();
+</script>
+</body>
+</html>
