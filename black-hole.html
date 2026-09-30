@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ブラックホール</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Yomogi&display=swap">
+<style>
+  /* 木の机に紙を置いて、赤と青のペンで書く見た目 */
+  :root, :root:not([data-theme="light"]) {
+    --table: #e9d3ae; --ink: #3a2c1c; --sub: #7a6650;
+    --p1: #d8344a; --p2: #2c56b8;
+  }
+  body {
+    background-image:
+      repeating-linear-gradient(90deg, rgba(120,80,30,.07) 0 3px, transparent 3px 23px),
+      linear-gradient(90deg, #e6cea6, #eed9b6 50%, #e3c89d);
+  }
+  .paper {
+    background: #f4f8fa;
+    border-radius: 3px;
+    padding: 12px 8px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.12), 0 10px 20px rgba(80,50,10,.18);
+    max-width: 460px; margin: 0 auto;
+    transform: rotate(.5deg);
+  }
+  .paper svg { display: block; width: 100%; height: auto; touch-action: manipulation; user-select: none; }
+  .hand { font-family: 'Yomogi', 'M PLUS Rounded 1c', cursive; }
+  .left { display: flex; gap: 14px; flex-wrap: wrap; margin: 0 0 12px; font-size: 15px; }
+  .left span { display: inline-flex; gap: 2px; }
+  .left b { width: 1.4em; text-align: center; font-weight: 400; font-size: 18px; }
+  .left b.used { opacity: .22; text-decoration: line-through; }
+  .btn.on { color: #f4f8fa; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="index.html">← ゲーム一覧</a><h1>ブラックホール</h1></div>
+  <p class="turn" id="turn"></p>
+  <div class="left hand" id="left"></div>
+  <div class="paper"><svg id="svg" viewBox="0 0 360 330"></svg></div>
+  <div class="bar">
+    <button class="btn" id="r1">あか先攻で最初から</button>
+    <button class="btn" id="r2">あお先攻で最初から</button>
+  </div>
+  <details class="rules" open>
+    <summary>ルール</summary>
+    <ul>
+      <li>三角に並んだ21個の丸に、交代で数字を書いていく。</li>
+      <li>書く数字は自分の1から順番に10まで。どの丸に書くかは自由。</li>
+      <li>20個埋まると、最後に残った1マスが塗りつぶされてブラックホールになる。</li>
+      <li>ブラックホールにくっついてる丸の数字を、色ごとに合計する。</li>
+      <li>合計が大きい方の勝ち。</li>
+    </ul>
+    <p class="note">元はウォルター・ジョリスの「ブラックホール」というゲーム。元のルールだと合計が小さい方が勝ちだけど、ここでは紹介動画のとおり大きい方を勝ちにしてる。</p>
+  </details>
+</div>
+<script src="online.js"></script>
+<script>
+const svg = document.getElementById('svg');
+const turnEl = document.getElementById('turn');
+const leftEl = document.getElementById('left');
+const NAME = ['あか', 'あお'];
+const PEN = ['var(--p1)', 'var(--p2)'];
+const ROWS = 6;
+
+// 丸の位置と、となり同士の関係を作る
+const cells = [];
+for (let r = 0; r < ROWS; r++) for (let k = 0; k <= r; k++) {
+  cells.push({ r, k, x: 180 + (k - r / 2) * 56, y: 34 + r * 52 });
+}
+const idx = (r, k) => cells.findIndex(c => c.r === r && c.k === k);
+cells.forEach(c => {
+  c.nb = [[c.r, c.k - 1], [c.r, c.k + 1], [c.r - 1, c.k - 1], [c.r - 1, c.k], [c.r + 1, c.k], [c.r + 1, c.k + 1]]
+    .map(([r, k]) => idx(r, k)).filter(i => i >= 0);
+});
+
+// 手描きっぽく少しゆがんだ丸
+function wobble(x, y, rad, seed) {
+  let d = '';
+  for (let a = 0; a <= 24; a++) {
+    const t = a / 24 * Math.PI * 2 + seed;
+    const rr = rad + Math.sin(t * 3 + seed * 7) * 0.9 + Math.cos(t * 2 + seed) * 0.6;
+    d += (a ? 'L' : 'M') + (x + Math.cos(t) * rr).toFixed(1) + ' ' + (y + Math.sin(t) * rr).toFixed(1);
+  }
+  return d + 'Z';
+}
+
+let marks, player, history;
+
+function reset(f) { player = f; marks = Array(cells.length).fill(null); history = []; draw(); }
+
+function nextNum(p) { return marks.filter(m => m && m.p === p).length + 1; }
+
+function hole() { return history.length === 20 ? marks.findIndex(m => !m) : -1; }
+
+function play(i) {
+  if (marks[i] || history.length === 20) return;
+  marks[i] = { p: player, n: nextNum(player) };
+  history.push(i);
+  player = 1 - player;
+  draw();
+}
+
+function draw() {
+  const h = hole();
+  let s = '';
+  // 最後に線を引いて集計するところ
+  if (h >= 0) {
+    for (const j of cells[h].nb) {
+      s += `<line x1="${cells[h].x}" y1="${cells[h].y}" x2="${cells[j].x}" y2="${cells[j].y}" stroke="${PEN[marks[j].p]}" stroke-width="2" stroke-linecap="round" opacity=".6"/>`;
+    }
+  }
+  cells.forEach((c, i) => {
+    s += `<path d="${wobble(c.x, c.y, 21, i * 1.7)}" fill="${h === i ? 'none' : '#f4f8fa'}" stroke="#333" stroke-width="1.5"/>`;
+    const m = marks[i];
+    if (m) s += `<text x="${c.x}" y="${c.y + 9}" text-anchor="middle" class="hand" font-size="27" fill="${PEN[m.p]}" transform="rotate(${(i * 37 % 13) - 6} ${c.x} ${c.y})">${m.n}</text>`;
+    if (h === i) {
+      s += `<clipPath id="hc"><path d="${wobble(c.x, c.y, 20, i * 1.7)}"/></clipPath><g clip-path="url(#hc)" stroke="${PEN[0]}" stroke-width="2.2" stroke-linecap="round">`;
+      for (let d = -40; d <= 40; d += 4.5) s += `<line x1="${c.x + d - 20}" y1="${c.y + 22}" x2="${c.x + d + 6}" y2="${c.y - 22}"/>`;
+      s += `</g>`;
+    }
+    if (!m && h < 0) s += `<circle cx="${c.x}" cy="${c.y}" r="24" fill="transparent" style="cursor:pointer" data-i="${i}"/>`;
+  });
+  svg.innerHTML = s;
+  Online.sync();
+
+  leftEl.innerHTML = [0, 1].map(p => {
+    const used = nextNum(p) - 1;
+    return `<span style="color:${PEN[p]}">${NAME[p]}:` +
+      Array.from({ length: 10 }, (_, n) => `<b class="${n < used ? 'used' : ''}">${n + 1}</b>`).join('') + '</span>';
+  }).join('');
+
+  turnEl.className = 'turn';
+  if (h >= 0) {
+    const sum = [0, 0];
+    cells[h].nb.forEach(j => sum[marks[j].p] += marks[j].n);
+    const w = sum[0] === sum[1] ? -1 : sum[0] > sum[1] ? 0 : 1;
+    turnEl.className = 'turn win';
+    turnEl.innerHTML = (w >= 0 ? `<span class="dot ${w ? 'p2' : 'p1'}"></span>` : '') +
+      `あか ${sum[0]} ― あお ${sum[1]}　` + (w >= 0 ? `${NAME[w]}の勝ち` : '引き分け');
+  } else {
+    turnEl.innerHTML = `<span class="dot ${player ? 'p2' : 'p1'}"></span>${NAME[player]}の番(${nextNum(player)} を書く)`;
+  }
+}
+
+svg.addEventListener('click', e => { if (!Online.canAct()) return; const i = e.target.dataset.i; if (i !== undefined) play(+i); });
+document.getElementById('r1').onclick = () => reset(0);
+document.getElementById('r2').onclick = () => reset(1);
+Online.init({ game: 'blackhole', names: NAME,
+  getState: () => ({ marks, player, history }),
+  setState: s => { ({ marks, player, history } = s); draw(); },
+  turn: () => hole() >= 0 ? null : player });
+reset(0);
+</script>
+</body>
+</html>

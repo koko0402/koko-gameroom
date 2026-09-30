@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ゼロから物語</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;700&family=Zen+Old+Mincho:wght@700&display=swap">
+<style>
+  /* 古い冒険の書みたいな、紙と革の見た目 */
+  :root, :root:not([data-theme="light"]) {
+    --table: #2d2219; --board: #f3e9d2; --line: #c9b58c; --ink: #3a2a1a; --sub: #7a6545;
+    --p1: #8c2f1b; --p2: #2f5d62; --ok: #2f7a3a;
+  }
+  body { font-family: 'Zen Kaku Gothic New', 'M PLUS Rounded 1c', sans-serif; color: #f3e9d2; }
+  .top a, .top h1 { color: #f3e9d2; }
+  .top h1 { font-family: 'Zen Old Mincho', serif; }
+  .book { background: var(--board); color: var(--ink); border-radius: 6px; padding: 16px; box-shadow: 0 0 0 6px #6b4a2b, 0 10px 24px rgba(0,0,0,.5); }
+  .tabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+  .tabs .btn { border-color: #f3e9d2; color: #f3e9d2; }
+  .tabs .btn.on { background: #f3e9d2; color: #2d2219; }
+  .book .btn { border-color: var(--ink); color: var(--ink); }
+  .book .btn.on { background: var(--ink); color: var(--board); }
+  label { display: block; font-weight: 700; margin: 10px 0 4px; }
+  input[type=text], textarea, select {
+    width: 100%; font: inherit; color: var(--ink); background: #fffaf0; border: 1.5px solid var(--line); border-radius: 6px; padding: 6px 8px;
+  }
+  textarea { min-height: 90px; resize: vertical; }
+  .row { display: flex; gap: 6px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
+  .row > * { flex: 1 1 120px; }
+  .row .btn { flex: 0 0 auto; }
+  .list { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+  .chip { border: 1.5px solid var(--line); border-radius: 999px; padding: 2px 10px; background: #fffaf0; cursor: pointer; font-size: 14px; }
+  .chip.on { background: var(--ink); color: var(--board); border-color: var(--ink); }
+  .chip.end { border-color: var(--p1); color: var(--p1); }
+  .choice { border: 1.5px dashed var(--line); border-radius: 8px; padding: 8px; margin: 8px 0; }
+  .warn { color: var(--p1); font-size: 13px; font-weight: 700; }
+  .play h2 { font-family: 'Zen Old Mincho', serif; margin: 0 0 8px; }
+  .play .text { white-space: pre-wrap; line-height: 1.9; font-size: 17px; }
+  .play .opts { display: grid; gap: 8px; margin-top: 16px; }
+  .play .opts .btn { text-align: left; border-radius: 8px; }
+  .bag { font-size: 13px; color: var(--sub); margin-top: 12px; }
+  .endcard { text-align: center; border: 2px solid var(--p1); border-radius: 8px; padding: 10px; margin-top: 16px; color: var(--p1); font-weight: 700; }
+  .note { color: var(--sub); }
+  .memo-sec { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="index.html">← ゲーム一覧</a><h1>ゼロから物語</h1></div>
+  <div class="tabs" id="tabs">
+    <button class="btn" data-t="world">世界をつくる</button>
+    <button class="btn" data-t="scene">シーンをつくる</button>
+    <button class="btn" data-t="play">遊ぶ</button>
+    <button class="btn" data-t="ends">エンド図鑑</button>
+    <button class="btn" data-t="file">保存・読み込み</button>
+  </div>
+  <div class="book" id="book"></div>
+  <details class="rules">
+    <summary style="color:#f3e9d2">使い方</summary>
+    <ul style="color:#e3d6b8">
+      <li>「世界をつくる」で、キャラ・スキル・アイテムを好きなだけ書く。</li>
+      <li>「シーンをつくる」で、場面の文章と選択肢を書く。選択肢ごとに、次に行くシーンを決める。</li>
+      <li>選択肢で「アイテムをもらう」「このアイテムがないと選べない」も決められる。</li>
+      <li>シーンを「エンド」にすると、そこで物語が終わる。エンドはいくつ作ってもいい。</li>
+      <li>「遊ぶ」で最初のシーンから遊べる。たどり着いたエンドは図鑑に残る。</li>
+      <li>書いたものはこのブラウザに自動で保存される。別のブラウザやPCでは消えて見えるので、大事なものは「保存・読み込み」からファイルに書き出しておく。</li>
+    </ul>
+  </details>
+</div>
+<script>
+const KEY = 'koko-sousaku-v1';
+const SAMPLE = {
+  title: '森の手紙',
+  chars: [{ name: 'ルカ', about: '郵便屋の見習い。方向音痴。' }],
+  skills: [{ name: '口笛', about: '森の動物が少しだけ言うことを聞く。' }],
+  items: [{ name: '古い地図', about: '端が破れてる。' }, { name: '木の実', about: 'リスの好物。' }],
+  start: 's1',
+  scenes: [
+    { id: 's1', title: '森の入り口', text: 'ルカは森の奥の家に手紙を届けることになった。\n道は二つに分かれている。', end: false,
+      choices: [{ label: '明るい道を行く', to: 's2', give: '木の実', need: '' }, { label: '暗い道を行く', to: 's3', give: '', need: '' }] },
+    { id: 's2', title: 'リスの広場', text: '木の実を持ったルカのまわりに、リスが集まってきた。', end: false,
+      choices: [{ label: '木の実をあげて道を聞く', to: 's4', give: '', need: '木の実' }, { label: 'そのまま進む', to: 's3', give: '', need: '' }] },
+    { id: 's3', title: '迷子', text: 'ぐるぐる歩いたら、入り口に戻ってきてしまった。\n手紙は明日届けよう。', end: true, choices: [] },
+    { id: 's4', title: '森の奥の家', text: 'リスの案内で、ルカはちゃんと手紙を届けられた。\nおばあさんがお茶を入れてくれた。', end: true, choices: [] },
+  ],
+};
+
+let data, tab = 'play', cur = null, run = null;
+function load() {
+  try { const s = localStorage.getItem(KEY); data = s ? JSON.parse(s) : null; } catch (e) { data = null; }
+  if (!data || !data.scenes) data = JSON.parse(JSON.stringify(SAMPLE));
+  data.seen = data.seen || [];
+}
+function save() { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {} }
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const sc = id => data.scenes.find(s => s.id === id);
+const newId = () => 's' + Date.now().toString(36) + Math.floor(Math.random() * 99);
+const book = document.getElementById('book');
+
+function worldView() {
+  const part = (key, label, ph) => `<div class="memo-sec"><label>${label}</label>` +
+    data[key].map((x, i) => `<div class="row"><input type="text" data-k="${key}" data-i="${i}" data-f="name" value="${esc(x.name)}" placeholder="名前">` +
+      `<input type="text" data-k="${key}" data-i="${i}" data-f="about" value="${esc(x.about)}" placeholder="${ph}"><button class="btn" data-del="${key}" data-i="${i}">消す</button></div>`).join('') +
+    `<button class="btn" data-add="${key}">+ ${label}を足す</button></div>`;
+  return `<label>物語のタイトル</label><input type="text" id="title" value="${esc(data.title)}">` +
+    part('chars', 'キャラ', 'どんな人?') + part('skills', 'スキル', '何ができる?') + part('items', 'アイテム', 'どんな物?') +
+    `<p class="note">アイテムは、シーンの選択肢で「もらう」「必要」に使える。</p>`;
+}
+
+function sceneView() {
+  if (!cur || !sc(cur)) cur = data.start;
+  const s = sc(cur);
+  let h = `<div class="list">` + data.scenes.map(x => `<span class="chip ${x.id === cur ? 'on' : ''} ${x.end ? 'end' : ''}" data-open="${x.id}">${x.id === data.start ? '▶ ' : ''}${esc(x.title || '(無題)')}${x.end ? '(エンド)' : ''}</span>`).join('') +
+    `<span class="chip" data-new="1">+ 新しいシーン</span></div>`;
+  if (!s) return h;
+  const itemOpts = sel => `<option value="">なし</option>` + data.items.map(it => `<option ${it.name === sel ? 'selected' : ''}>${esc(it.name)}</option>`).join('');
+  const sceneOpts = sel => `<option value="">(まだ決めてない)</option>` + data.scenes.map(x => `<option value="${x.id}" ${x.id === sel ? 'selected' : ''}>${esc(x.title || '(無題)')}</option>`).join('') + `<option value="__new">+ 新しいシーンを作る</option>`;
+  h += `<label>シーンの名前</label><input type="text" data-s="title" value="${esc(s.title)}">` +
+    `<label>文章</label><textarea data-s="text">${esc(s.text)}</textarea>` +
+    `<div class="row"><label style="flex:0 0 auto"><input type="checkbox" data-s="end" ${s.end ? 'checked' : ''}> ここで終わり(エンド)</label>` +
+    `<button class="btn" data-start="1" ${data.start === s.id ? 'disabled' : ''}>最初のシーンにする</button>` +
+    `<button class="btn" data-delscene="1" ${data.scenes.length < 2 ? 'disabled' : ''}>このシーンを消す</button></div>`;
+  if (!s.end) {
+    h += `<label>選択肢</label>` + s.choices.map((c, i) => {
+      const broken = c.to && !sc(c.to);
+      return `<div class="choice"><input type="text" data-c="${i}" data-f="label" value="${esc(c.label)}" placeholder="選択肢の文">` +
+        `<div class="row"><span style="flex:0 0 auto">行き先</span><select data-c="${i}" data-f="to">${sceneOpts(c.to)}</select></div>` +
+        (broken ? `<p class="warn">行き先のシーンが消えてる。選び直して。</p>` : !c.to ? `<p class="warn">行き先が決まってない。</p>` : '') +
+        `<div class="row"><span style="flex:0 0 auto">もらう</span><select data-c="${i}" data-f="give">${itemOpts(c.give)}</select>` +
+        `<span style="flex:0 0 auto">必要</span><select data-c="${i}" data-f="need">${itemOpts(c.need)}</select>` +
+        `<button class="btn" data-delc="${i}">消す</button></div></div>`;
+    }).join('') + `<button class="btn" data-addc="1">+ 選択肢を足す</button>`;
+  }
+  return h;
+}
+
+function playView() {
+  if (!run) return `<div class="play"><h2>${esc(data.title)}</h2><p class="note">最初のシーン: ${esc(sc(data.start)?.title || 'なし')}</p><button class="btn" data-go="1">はじめから遊ぶ</button></div>`;
+  const s = sc(run.at);
+  if (!s) return `<div class="play"><p class="warn">行き先のシーンがない。「シーンをつくる」で直して。</p><button class="btn" data-go="1">はじめから</button></div>`;
+  let h = `<div class="play"><h2>${esc(s.title)}</h2><div class="text">${esc(s.text)}</div>`;
+  if (s.end) {
+    if (!data.seen.includes(s.id)) { data.seen.push(s.id); save(); }
+    const total = data.scenes.filter(x => x.end).length;
+    h += `<div class="endcard">END「${esc(s.title)}」<br><small>見つけたエンド ${data.seen.filter(id => sc(id)?.end).length} / ${total}</small></div>` +
+      `<div class="opts"><button class="btn" data-go="1">はじめから</button></div>`;
+  } else {
+    h += `<div class="opts">` + s.choices.map((c, i) => {
+      const lock = c.need && !run.bag.includes(c.need);
+      return `<button class="btn" data-pick="${i}" ${lock || !sc(c.to) ? 'disabled' : ''}>${esc(c.label || '…')}${lock ? `(${esc(c.need)}が必要)` : ''}</button>`;
+    }).join('') + `</div>`;
+    if (!s.choices.length) h += `<p class="warn">選択肢がない。</p>`;
+  }
+  h += `<p class="bag">持ち物: ${run.bag.length ? run.bag.map(esc).join('、') : 'なし'}</p></div>`;
+  return h;
+}
+
+function endsView() {
+  const ends = data.scenes.filter(x => x.end);
+  return `<h2 style="margin-top:0">エンド図鑑</h2><p class="note">${data.seen.filter(id => sc(id)?.end).length} / ${ends.length} 見つけた</p><div class="list">` +
+    ends.map(e => data.seen.includes(e.id) ? `<span class="chip end">${esc(e.title)}</span>` : `<span class="chip">？？？</span>`).join('') +
+    `</div><button class="btn" data-clearseen="1">図鑑をリセット</button>`;
+}
+
+function fileView() {
+  return `<p>今の物語をファイルに書き出したり、書き出したファイルを読み込んだりできる。</p>` +
+    `<div class="bar"><button class="btn" data-export="1">ファイルに書き出す</button>` +
+    `<label class="btn" style="margin:0;font-weight:700">ファイルを読み込む<input type="file" accept=".json,application/json" id="imp" hidden></label></div>` +
+    `<div class="bar"><button class="btn" data-sample="1">見本の物語に戻す</button><button class="btn" data-blank="1">まっさらから始める</button></div>` +
+    `<p class="note">読み込みや「戻す」「まっさら」をすると、今書いてるものは上書きされる。先に書き出しておくと安心。</p>`;
+}
+
+function draw() {
+  document.querySelectorAll('#tabs .btn').forEach(b => b.classList.toggle('on', b.dataset.t === tab));
+  book.innerHTML = { world: worldView, scene: sceneView, play: playView, ends: endsView, file: fileView }[tab]();
+}
+
+document.getElementById('tabs').onclick = e => { const t = e.target.dataset.t; if (t) { tab = t; if (t === 'play') run = null; draw(); } };
+
+book.addEventListener('input', e => {
+  const t = e.target;
+  if (t.id === 'title') data.title = t.value;
+  else if (t.dataset.k) data[t.dataset.k][+t.dataset.i][t.dataset.f] = t.value;
+  else if (t.dataset.s && t.type !== 'checkbox') sc(cur)[t.dataset.s] = t.value;
+  else if (t.dataset.c !== undefined && t.tagName === 'INPUT') sc(cur).choices[+t.dataset.c][t.dataset.f] = t.value;
+  save();
+});
+
+book.addEventListener('change', e => {
+  const t = e.target;
+  if (t.dataset.s === 'end') { sc(cur).end = t.checked; save(); draw(); }
+  else if (t.dataset.c !== undefined && t.tagName === 'SELECT') {
+    const c = sc(cur).choices[+t.dataset.c];
+    if (t.value === '__new') {
+      const id = newId(); data.scenes.push({ id, title: '新しいシーン', text: '', end: false, choices: [] }); c.to = id;
+    } else c[t.dataset.f] = t.value;
+    save(); draw();
+  } else if (t.id === 'imp' && t.files[0]) {
+    t.files[0].text().then(txt => {
+      try { const d = JSON.parse(txt); if (!d.scenes || !d.start) throw 0; data = d; data.seen = data.seen || []; save(); cur = null; alert('読み込んだ'); draw(); }
+      catch (err) { alert('このファイルは読み込めなかった'); }
+    });
+  }
+});
+
+book.addEventListener('click', e => {
+  const d = e.target.closest('[data-add],[data-del],[data-open],[data-new],[data-start],[data-delscene],[data-addc],[data-delc],[data-go],[data-pick],[data-clearseen],[data-export],[data-sample],[data-blank]')?.dataset;
+  if (!d) return;
+  if (d.add) data[d.add].push({ name: '', about: '' });
+  else if (d.del) data[d.del].splice(+d.i, 1);
+  else if (d.open) cur = d.open;
+  else if (d.new) { const id = newId(); data.scenes.push({ id, title: '新しいシーン', text: '', end: false, choices: [] }); cur = id; }
+  else if (d.start) data.start = cur;
+  else if (d.delscene) {
+    if (!confirm('このシーンを消す?')) return;
+    data.scenes = data.scenes.filter(s => s.id !== cur);
+    if (data.start === cur) data.start = data.scenes[0].id;
+    cur = data.start;
+  }
+  else if (d.addc) sc(cur).choices.push({ label: '', to: '', give: '', need: '' });
+  else if (d.delc) sc(cur).choices.splice(+d.delc, 1);
+  else if (d.go) run = { at: data.start, bag: [] };
+  else if (d.pick !== undefined) {
+    const c = sc(run.at).choices[+d.pick];
+    if (c.give && !run.bag.includes(c.give)) run.bag.push(c.give);
+    run.at = c.to;
+  }
+  else if (d.clearseen) { if (!confirm('図鑑をリセットする?')) return; data.seen = []; }
+  else if (d.export) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+    a.download = (data.title || 'monogatari') + '.json'; a.click(); return;
+  }
+  else if (d.sample) { if (!confirm('見本の物語に戻す? 今のものは消える')) return; data = JSON.parse(JSON.stringify(SAMPLE)); data.seen = []; cur = null; }
+  else if (d.blank) {
+    if (!confirm('まっさらにする? 今のものは消える')) return;
+    data = { title: '新しい物語', chars: [], skills: [], items: [], start: 's1', scenes: [{ id: 's1', title: 'はじまり', text: '', end: false, choices: [] }], seen: [] }; cur = null;
+  }
+  save(); draw();
+});
+
+load(); draw();
+</script>
+</body>
+</html>

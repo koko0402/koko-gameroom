@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>バリケード</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  /* barricade.gg 風のダークな画面 */
+  :root, :root:not([data-theme="light"]) {
+    --table: #000; --board: #161616; --line: #3a3a3a;
+    --ink: #f2f2f2; --sub: #9a9a9a; --p1: #e5484d; --p2: #3b82f6;
+  }
+  body { background: #000; font-family: 'Inter', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif; }
+  .board-box { background: #161616; box-shadow: none; border-radius: 12px; padding: 8px; }
+  .badge {
+    display: flex; justify-content: center; margin: 8px 0;
+  }
+  .badge span {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: #fff; font-weight: 700; font-size: 14px;
+    padding: 2px 12px; border-radius: 6px;
+  }
+  .badge span::before { content: ''; width: 12px; height: 4px; border-radius: 2px; background: #fff; }
+  .badge .p1 { background: var(--p1); }
+  .badge .p2 { background: var(--p2); }
+  .slot { fill: transparent; cursor: pointer; }
+  .slot:hover { fill: #bdbdbd; opacity: .6; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="index.html">← ゲーム一覧</a><h1>バリケード</h1></div>
+  <p class="turn" id="turn"></p>
+  <div class="badge"><span class="p2" id="w1"></span></div>
+  <div class="board-box"><svg id="svg" viewBox="0 0 460 460"></svg></div>
+  <div class="badge"><span class="p1" id="w0"></span></div>
+  <div class="bar">
+    <button class="btn on" data-mode="move">コマを動かす</button>
+    <button class="btn" data-mode="h">横の壁</button>
+    <button class="btn" data-mode="v">縦の壁</button>
+    <button class="btn" id="reset">最初から</button>
+  </div>
+  <details class="rules" open>
+    <summary>ルール</summary>
+    <ul>
+      <li>赤は上の端(赤い列)、青は下の端(青い列)にたどり着いたら勝ち。</li>
+      <li>自分の番は「コマを1マス動かす」か「壁を1枚置く」のどちらか。壁は1人10枚。</li>
+      <li>壁は2マス分の長さ。重ねたり、十字に交差させたりはできない。</li>
+      <li>どちらのコマもゴールに行ける道が必ず残るように置く。ふさぐ置き方はできない。</li>
+      <li>相手のコマが隣にいたら飛び越せる。後ろが壁なら斜めに進める。</li>
+    </ul>
+  </details>
+</div>
+<script src="online.js"></script>
+<script>
+const N = 9, P = 50, S = 40, M = 10;
+const svg = document.getElementById('svg');
+const NAME = ['赤', '青'];
+let pos, walls, left, player, winner, mode = 'move', err = '';
+
+function reset() {
+  pos = [[8, 4], [0, 4]]; walls = []; left = [10, 10]; player = 0; winner = null; err = '';
+  draw();
+}
+
+const has = (o, r, c) => walls.some(w => w.o === o && w.r === r && w.c === c);
+
+function blocked(r, c, dr, dc) {
+  if (dr === 1) return has('h', r, c) || has('h', r, c - 1);
+  if (dr === -1) return has('h', r - 1, c) || has('h', r - 1, c - 1);
+  if (dc === 1) return has('v', r, c) || has('v', r - 1, c);
+  return has('v', r, c - 1) || has('v', r - 1, c - 1);
+}
+const inside = (r, c) => r >= 0 && r < N && c >= 0 && c < N;
+const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+function moves(p) {
+  const [r, c] = pos[p], [or, oc] = pos[1 - p], out = [];
+  for (const [dr, dc] of DIRS) {
+    const nr = r + dr, nc = c + dc;
+    if (!inside(nr, nc) || blocked(r, c, dr, dc)) continue;
+    if (nr === or && nc === oc) {
+      const jr = nr + dr, jc = nc + dc;
+      if (inside(jr, jc) && !blocked(nr, nc, dr, dc)) out.push([jr, jc]);
+      else for (const [sr, sc] of dr ? [[0, 1], [0, -1]] : [[1, 0], [-1, 0]]) {
+        const tr = nr + sr, tc = nc + sc;
+        if (inside(tr, tc) && !blocked(nr, nc, sr, sc)) out.push([tr, tc]);
+      }
+    } else out.push([nr, nc]);
+  }
+  return out;
+}
+
+function canReach(p) {
+  const goal = p === 0 ? 0 : N - 1, seen = new Set([pos[p].join()]), q = [pos[p]];
+  while (q.length) {
+    const [r, c] = q.shift();
+    if (r === goal) return true;
+    for (const [dr, dc] of DIRS) {
+      const nr = r + dr, nc = c + dc, k = nr + ',' + nc;
+      if (inside(nr, nc) && !blocked(r, c, dr, dc) && !seen.has(k)) { seen.add(k); q.push([nr, nc]); }
+    }
+  }
+  return false;
+}
+
+function placeWall(o, r, c) {
+  if (left[player] === 0) return err = '壁はもう残ってない';
+  const clash = has('h', r, c) || has('v', r, c) ||
+    (o === 'h' ? has('h', r, c - 1) || has('h', r, c + 1) : has('v', r - 1, c) || has('v', r + 1, c));
+  if (clash) return err = 'ほかの壁と重なるから置けない';
+  walls.push({ o, r, c });
+  if (!canReach(0) || !canReach(1)) { walls.pop(); return err = 'ゴールまでの道が全部ふさがるから置けない'; }
+  left[player]--; err = ''; player = 1 - player;
+}
+
+function movePawn(r, c) {
+  if (!moves(player).some(m => m[0] === r && m[1] === c)) return;
+  pos[player] = [r, c]; err = '';
+  if (r === (player === 0 ? 0 : N - 1)) winner = player; else player = 1 - player;
+}
+
+const X = c => M + c * P;
+
+function draw() {
+  let s = '';
+  const legal = winner === null && mode === 'move' ? moves(player) : [];
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+    const fill = r === 0 ? '#5a2427' : r === N - 1 ? '#22345a' : '#2a2a2a';
+    const edge = r === 0 ? '#7a3236' : r === N - 1 ? '#2f4a80' : '#333';
+    const isLegal = legal.some(m => m[0] === r && m[1] === c);
+    s += `<rect x="${X(c)}" y="${X(r)}" width="${S}" height="${S}" rx="3" fill="${fill}" stroke="${edge}" stroke-width="1.5"
+      ${isLegal ? `style="cursor:pointer" data-r="${r}" data-c="${c}"` : ''}/>`;
+    if (isLegal) s += `<circle cx="${X(c) + S / 2}" cy="${X(r) + S / 2}" r="6" fill="var(--${player ? 'p2' : 'p1'})" opacity=".55" pointer-events="none"/>`;
+  }
+  pos.forEach(([r, c], p) => {
+    s += `<circle cx="${X(c) + S / 2}" cy="${X(r) + S / 2}" r="12" fill="var(--${p ? 'p2' : 'p1'})" pointer-events="none"/>`;
+  });
+  for (const w of walls) {
+    const col = '#e6e6e6';
+    if (w.o === 'h') s += `<rect x="${X(w.c)}" y="${X(w.r) + S + 1}" width="${P + S}" height="8" rx="4" fill="${col}"/>`;
+    else s += `<rect x="${X(w.c) + S + 1}" y="${X(w.r)}" width="8" height="${P + S}" rx="4" fill="${col}"/>`;
+  }
+  if (winner === null && mode !== 'move') {
+    for (let r = 0; r < N - 1; r++) for (let c = 0; c < N - 1; c++) {
+      if (mode === 'h') s += `<rect class="slot" x="${X(c)}" y="${X(r) + S - 6}" width="${P + S}" height="20" rx="4" data-w="${r},${c}"/>`;
+      else s += `<rect class="slot" x="${X(c) + S - 6}" y="${X(r)}" width="20" height="${P + S}" rx="4" data-w="${r},${c}"/>`;
+    }
+  }
+  svg.innerHTML = s;
+  Online.sync();
+  const t = document.getElementById('turn');
+  const cls = (winner ?? player) === 0 ? 'p1' : 'p2';
+  t.className = 'turn' + (winner !== null ? ' win' : '');
+  t.innerHTML = `<span class="dot ${cls}"></span>` + (winner !== null ? `${NAME[winner]}の勝ち` : `${NAME[player]}の番` + (err ? `<span class="note">　${err}</span>` : ''));
+  document.getElementById('w0').textContent = left[0];
+  document.getElementById('w1').textContent = left[1];
+}
+
+svg.addEventListener('click', e => {
+  if (winner !== null || !Online.canAct()) return;
+  const d = e.target.dataset;
+  if (d.w) { const [r, c] = d.w.split(',').map(Number); placeWall(mode, r, c); }
+  else if (d.r !== undefined) movePawn(+d.r, +d.c);
+  draw();
+});
+document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => {
+  mode = b.dataset.mode;
+  document.querySelectorAll('[data-mode]').forEach(x => x.classList.toggle('on', x === b));
+  draw();
+});
+document.getElementById('reset').onclick = reset;
+Online.init({ game: 'barricade', names: NAME,
+  getState: () => ({ pos, walls, left, player, winner }),
+  setState: s => { ({ pos, walls, left, player, winner } = s); err = ''; draw(); },
+  turn: () => winner === null ? player : null });
+reset();
+</script>
+</body>
+</html>

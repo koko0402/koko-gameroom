@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>陣とりゲーム</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  /* テーブルに白い紙を置いて、むらさきと赤のチップで遊ぶ見た目 */
+  :root, :root:not([data-theme="light"]) {
+    --table: #dcdad6; --ink: #2b2b2b; --sub: #6b6763;
+    --p1: #6b3fd4; --p2: #e8391f;
+  }
+  .paper {
+    background: #fdfdfb;
+    border-radius: 4px;
+    padding: 10px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.12), 0 8px 18px rgba(0,0,0,.10);
+    transform: rotate(-.6deg);
+  }
+  .paper svg { display: block; width: 100%; height: auto; touch-action: manipulation; user-select: none; }
+  .btn.on { color: #fdfdfb; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="index.html">← ゲーム一覧</a><h1>陣とりゲーム</h1></div>
+  <p class="turn" id="turn"></p>
+  <div class="paper"><svg id="svg" viewBox="0 0 440 220"></svg></div>
+  <div class="bar">
+    <button class="btn" id="r1">むらさき先攻で最初から</button>
+    <button class="btn" id="r2">あか先攻で最初から</button>
+  </div>
+  <details class="rules" open>
+    <summary>ルール</summary>
+    <ul>
+      <li>自分の前にある3つの駒と、相手の3つの駒を入れ替えるゲーム。</li>
+      <li>先攻・後攻はジャンケンで決める。</li>
+      <li>交代で、自分の駒を1つ選んで線でつながった隣の空いてる点へ1つ動かす。</li>
+      <li>3つとも相手の陣地(向こう側の3つの点)に入れたら勝ち。</li>
+    </ul>
+    <p class="note">動かせる駒がないときはパスになる(元の動画に説明がなかったので、ここは自分で決めた)。</p>
+  </details>
+</div>
+<script src="online.js"></script>
+<script>
+const svg = document.getElementById('svg');
+const turnEl = document.getElementById('turn');
+
+// 点の位置。左の3点がむらさきの陣地、右の3点があかの陣地
+const P = {
+  LT: [92, 40], LM: [70, 110], LB: [48, 180],
+  W: [160, 110], N: [220, 50], C: [220, 110], S: [220, 170], E: [280, 110],
+  RT: [348, 40], RM: [370, 110], RB: [392, 180],
+};
+const EDGES = [
+  ['LT','LM'], ['LM','LB'], ['LM','W'],
+  ['W','N'], ['N','E'], ['E','S'], ['S','W'],
+  ['W','C'], ['C','E'], ['N','C'], ['C','S'],
+  ['E','RM'], ['RM','RT'], ['RM','RB'],
+];
+const HOME = [['LT','LM','LB'], ['RT','RM','RB']];
+const NAME = ['むらさき', 'あか'];
+const COLOR = ['var(--p1)', 'var(--p2)'];
+
+let at, player, picked, winner, passNote;
+
+function reset(first) {
+  at = {};
+  HOME[0].forEach(k => at[k] = 0);
+  HOME[1].forEach(k => at[k] = 1);
+  player = first; picked = null; winner = null; passNote = '';
+  draw();
+}
+
+function nexts(k) {
+  return EDGES.flatMap(([a, b]) => a === k ? [b] : b === k ? [a] : []).filter(n => at[n] === undefined);
+}
+
+function canMove(p) {
+  return Object.keys(at).some(k => at[k] === p && nexts(k).length);
+}
+
+function click(k) {
+  if (winner !== null) return;
+  if (at[k] === player) { picked = picked === k ? null : k; draw(); return; }
+  if (picked && nexts(picked).includes(k)) {
+    delete at[picked]; at[k] = player; picked = null; passNote = '';
+    if (HOME[1 - player].every(h => at[h] === player)) { winner = player; draw(); return; }
+    player = 1 - player;
+    if (!canMove(player)) { passNote = `${NAME[player]}は動かせないのでパス。`; player = 1 - player; }
+    draw();
+  }
+}
+
+function chip(x, y, p, lifted) {
+  const dy = lifted ? -4 : 0;
+  return `<g transform="translate(${x},${y + dy})">
+    <ellipse cx="0" cy="${4 - dy}" rx="15" ry="7" fill="rgba(0,0,0,${lifted ? .18 : .12})"/>
+    <circle r="15" fill="${COLOR[p]}"/>
+    <circle r="11.5" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="1.2"/>
+    <ellipse cx="-4" cy="-5" rx="6" ry="3" fill="rgba(255,255,255,.22)"/>
+  </g>`;
+}
+
+function draw() {
+  let s = `<g fill="none" stroke="#2b2b2b" stroke-width="1.6" stroke-linecap="round">`;
+  s += `<circle cx="220" cy="110" r="60"/>`;
+  for (const [a, b] of EDGES) {
+    if (['W-N','N-E','E-S','S-W'].includes(`${a}-${b}`)) continue; // 円の弧は上の円で描く
+    s += `<line x1="${P[a][0]}" y1="${P[a][1]}" x2="${P[b][0]}" y2="${P[b][1]}"/>`;
+  }
+  s += `</g>`;
+  const targets = picked ? nexts(picked) : [];
+  for (const k in P) {
+    const [x, y] = P[k];
+    s += `<circle cx="${x}" cy="${y}" r="3.2" fill="#2b2b2b"/>`;
+    if (targets.includes(k)) s += `<circle cx="${x}" cy="${y}" r="13" fill="none" stroke="${COLOR[player]}" stroke-width="2.5" stroke-dasharray="4 4"/>`;
+  }
+  for (const k in at) s += chip(P[k][0], P[k][1], at[k], k === picked);
+  for (const k in P) s += `<circle cx="${P[k][0]}" cy="${P[k][1]}" r="22" fill="transparent" style="cursor:pointer" data-k="${k}"/>`;
+  svg.innerHTML = s;
+  Online.sync();
+
+  const who = winner ?? player;
+  turnEl.className = 'turn' + (winner !== null ? ' win' : '');
+  turnEl.innerHTML = `<span class="dot ${who ? 'p2' : 'p1'}"></span>` +
+    (winner !== null ? `${NAME[winner]}の勝ち` : `${passNote}${NAME[player]}の番` + (picked ? '(動かす先を選ぶ)' : '(動かす駒を選ぶ)'));
+}
+
+svg.addEventListener('click', e => { if (!Online.canAct()) return; const k = e.target.dataset.k; if (k) click(k); });
+document.getElementById('r1').onclick = () => reset(0);
+document.getElementById('r2').onclick = () => reset(1);
+Online.init({ game: 'jintori', names: NAME,
+  getState: () => ({ at, player, winner, passNote }),
+  setState: s => { ({ at, player, winner, passNote } = s); picked = null; draw(); },
+  turn: () => winner === null ? player : null });
+reset(0);
+</script>
+</body>
+</html>

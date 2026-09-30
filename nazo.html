@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ふたりで謎解き</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  /* 脱出ゲームの封筒っぽい見た目。ヒントは封筒の中 */
+  :root, :root:not([data-theme="light"]) {
+    --table: #1d2b24; --board: #efe6cf; --line: #b8a67a; --ink: #2a2418; --sub: #6d6148;
+    --p1: #c0392b; --p2: #2c6e9b; --ok: #2e7d4f;
+  }
+  .top a, .top h1 { color: #efe6cf; }
+  .card { background: var(--board); border-radius: 10px; padding: 18px 16px; box-shadow: 0 8px 20px rgba(0,0,0,.35); }
+  .card h2 { margin: 0 0 8px; font-size: 20px; }
+  .env { border: 2px solid var(--line); border-radius: 8px; padding: 14px; margin: 10px 0; background: #fbf6e6; position: relative; }
+  .env::before { content: attr(data-who); position: absolute; top: -12px; left: 12px; background: var(--board); padding: 0 6px; font-weight: 800; font-size: 13px; }
+  .env.a::before { color: var(--p1); } .env.b::before { color: var(--p2); }
+  .env p { margin: 0; font-size: 18px; }
+  .progress { display: flex; gap: 4px; margin: 0 0 12px; }
+  .progress span { flex: 1; height: 8px; border-radius: 4px; background: rgba(255,255,255,.15); }
+  .progress span.ok { background: var(--ok); } .progress span.miss { background: #8a7a5a; } .progress span.now { background: #efe6cf; }
+  input[type=text] { width: 100%; font: inherit; font-size: 20px; padding: 8px 10px; border-radius: 8px; border: 2px solid var(--line); background: #fffdf5; color: var(--ink); }
+  .gate { text-align: center; padding: 16px 0; }
+  .gate p { font-size: 22px; font-weight: 800; margin: 6px 0; }
+  .res { font-weight: 800; font-size: 20px; margin: 10px 0; }
+  .res.ok { color: var(--ok); } .res.ng { color: var(--p1); }
+  .rules, .rules summary { color: #d9ceb2; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="index.html">← ゲーム一覧</a><h1>ふたりで謎解き</h1></div>
+  <div class="progress" id="prog"></div>
+  <div class="card" id="card"></div>
+  <details class="rules" open>
+    <summary>ルール</summary>
+    <ul>
+      <li>2人で協力するゲーム。1問ごとに、あか用とあお用の2つのヒントがある。</li>
+      <li>自分のヒントは自分だけが見る。相手のヒントは見ない。</li>
+      <li>2人のヒントを合わせないと答えは出ない。口で相談して、答えを1つ入力する。</li>
+      <li>雑学の知識もいる。分からなかったら「答えを見る」で次へ進める。</li>
+      <li>答えはひらがな・カタカナ・数字(全角/半角)どれで入れてもいい。</li>
+    </ul>
+    <p class="note" style="color:#b8ad90">問題はClaudeが作った仮のもの。自分で作った問題に入れ替えたいときは、このファイルの QUESTIONS を書きかえる。</p>
+  </details>
+</div>
+<script src="online.js"></script>
+<script>
+// 問題。a があか用ヒント、b があお用ヒント、ans が正解(いくつ書いてもいい)
+// memo は答えの根拠。ここさんの確認待ち
+const QUESTIONS = [
+  { a: '東京スカイツリーの高さは何メートル?', b: '相手の答えから、1年(うるう年じゃない)の日数を引くと?', ans: ['269'], memo: 'スカイツリー634m − 365日 = 269' },
+  { a: 'サッカーは1チーム何人で試合をする?', b: '野球で守るのは1チーム何人? 相手の答えと足すと?', ans: ['20'], memo: 'サッカー11人 + 野球9人 = 20' },
+  { a: '日本では、虹は何色と言われる?', b: '1週間は何日? 相手の答えとかけ算すると?', ans: ['49'], memo: '虹7色 × 7日 = 49' },
+  { a: 'オリンピックのマークに輪はいくつある?', b: '「あ」から、相手の数だけ50音を進めると何の字?(「あ」の次の「い」が1つ目)', ans: ['か'], memo: '五輪マーク5つ。あ→い→う→え→お→か' },
+  { a: '円周率を小数第2位まで言うと?', b: '相手の答えを100倍すると?', ans: ['314'], memo: '3.14 × 100 = 314' },
+  { a: '日本の都道府県はいくつ?', b: 'アメリカの州はいくつ? そこから相手の答えを引くと?', ans: ['3'], memo: 'アメリカ50州 − 47都道府県 = 3' },
+  { a: 'ふつうのピアノ(グランドピアノ)の鍵盤はいくつ?', b: '相手の答えを8で割ると?', ans: ['11'], memo: '88鍵 ÷ 8 = 11' },
+  { a: '大人の人間の骨は、だいたい何本と言われる?', b: '相手の答えの、百の位と一の位を足すと?', ans: ['8'], memo: '成人の骨は約206本。2 + 6 = 8' },
+  { a: '1ダースはいくつ?', b: '十二支で、相手の数の番目にいる動物は?(1番目はねずみ)', ans: ['いのしし', 'い', '亥', '猪'], memo: '1ダース12。十二支の12番目は亥(いのしし)' },
+  { a: '太陽系で、太陽に一番近い惑星は?', b: '相手の答えの1文字目の漢字を使った曜日は何曜日?', ans: ['水曜日', 'すいようび', '水曜', 'すいよう'], memo: '水星。水曜日' },
+];
+const NAME = ['あか', 'あお'];
+const card = document.getElementById('card');
+let q, phase, results, input, lastOk;
+
+function reset() { q = 0; results = []; startQ(); }
+function startQ() { phase = Online.active ? 'answer' : 'gateA'; input = ''; lastOk = null; draw(); }
+
+// 表記ゆれを吸収: 全角半角をそろえて、カタカナをひらがなに、空白を消す
+function norm(s) {
+  return s.normalize('NFKC').toLowerCase().replace(/\s/g, '')
+    .replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
+}
+
+function draw() {
+  document.getElementById('prog').innerHTML = QUESTIONS.map((_, i) =>
+    `<span class="${i < results.length ? (results[i] ? 'ok' : 'miss') : i === q ? 'now' : ''}"></span>`).join('');
+  const Q = QUESTIONS[q];
+  let s = '';
+  if (phase === 'end') {
+    const n = results.filter(Boolean).length;
+    s = `<h2>おしまい</h2><p class="res ok">${QUESTIONS.length}問中 ${n}問 正解</p><button class="btn" data-a="reset">もう一度</button>`;
+  } else if (phase === 'gateA' || phase === 'gateB') {
+    const p = phase === 'gateA' ? 0 : 1;
+    s = `<div class="gate"><p>第${q + 1}問</p><p><span class="dot ${p ? 'p2' : 'p1'}" style="display:inline-block;vertical-align:-3px"></span> ${NAME[p]}のヒント</p><p class="note">${NAME[1 - p]}は画面を見ないで</p><button class="btn" data-a="see">${NAME[p]}が見る</button></div>`;
+  } else if (phase === 'hintA' || phase === 'hintB') {
+    const p = phase === 'hintA' ? 0 : 1;
+    s = `<h2>第${q + 1}問 ${NAME[p]}のヒント</h2><div class="env ${p ? 'b' : 'a'}" data-who="${NAME[p]}だけ"><p>${p ? Q.b : Q.a}</p></div>` +
+      `<p class="note">覚えたら隠す。内容は口で伝えてもいい。</p><button class="btn" data-a="hide">見終わった(隠す)</button>`;
+  } else if (phase === 'answer') {
+    const mine = Online.active ? Online.me : null;
+    s = `<h2>第${q + 1}問 答え</h2>` +
+      (mine !== null ? `<div class="env ${mine ? 'b' : 'a'}" data-who="${NAME[mine]}だけのヒント"><p>${mine ? Q.b : Q.a}</p></div><p class="note">相手のヒントは相手にしか見えない。通話やチャットで伝え合って、答えを入れる。どっちが答えてもいい。</p>`
+        : `<p class="note">2人で相談して、答えを入れる。</p>`) +
+      `<input type="text" id="ans" value="${input.replace(/"/g, '&quot;')}" placeholder="答え" autocomplete="off">` +
+      (lastOk === false ? `<p class="res ng">ちがうみたい。もう一回考えてみて。</p>` : '') +
+      `<div class="bar"><button class="btn" data-a="check">答える</button>` +
+      (mine === null ? `<button class="btn" data-a="againA">あかがもう一度見る</button><button class="btn" data-a="againB">あおがもう一度見る</button>` : '') +
+      `<button class="btn" data-a="give">答えを見る</button></div>`;
+  } else if (phase === 'result') {
+    s = `<h2>第${q + 1}問</h2><p class="res ${results[q] ? 'ok' : 'ng'}">${results[q] ? '正解!' : '答えを見た'}</p>` +
+      `<div class="env a" data-who="あかのヒント"><p>${Q.a}</p></div><div class="env b" data-who="あおのヒント"><p>${Q.b}</p></div>` +
+      `<p>答え: <b>${Q.ans[0]}</b><br><span class="note">${Q.memo}</span></p>` +
+      `<button class="btn" data-a="next">${q + 1 < QUESTIONS.length ? '次の問題へ' : '結果を見る'}</button>`;
+  }
+  card.innerHTML = s;
+  Online.sync();
+  const box = document.getElementById('ans');
+  if (box) { box.focus(); box.oninput = () => input = box.value; box.onkeydown = e => { if (e.key === 'Enter') check(); }; }
+}
+
+function check() {
+  if (!input.trim()) return;
+  if (QUESTIONS[q].ans.some(a => norm(a) === norm(input))) { results[q] = true; phase = 'result'; }
+  else lastOk = false;
+  draw();
+}
+
+let back = 'answer';
+card.addEventListener('click', e => {
+  const a = e.target.closest('button')?.dataset.a;
+  if (!a) return;
+  if (a === 'see') phase = phase === 'gateA' ? 'hintA' : 'hintB';
+  else if (a === 'hide') {
+    // 最初はあか→あおの順に回す。「もう一度見る」のときは答え画面に戻る
+    phase = phase === 'hintA' && back !== 'again' ? 'gateB' : 'answer';
+    back = 'answer';
+  }
+  else if (a === 'check') return check();
+  else if (a === 'againA') { phase = 'gateA'; back = 'again'; }
+  else if (a === 'againB') { phase = 'gateB'; back = 'again'; }
+  else if (a === 'give') { if (!confirm('答えを見る?')) return; results[q] = false; phase = 'result'; }
+  else if (a === 'next') { q++; if (q >= QUESTIONS.length) phase = 'end'; else return startQ(); }
+  else if (a === 'reset') return reset();
+  draw();
+});
+Online.init({ game: 'nazo', names: NAME,
+  getState: () => ({ q, phase, results }),
+  setState: s => { ({ q, phase, results } = s); lastOk = null; draw(); },
+  onConnect: () => { if (/^(gate|hint)/.test(phase)) phase = 'answer'; draw(); },
+  turn: () => null });
+reset();
+</script>
+</body>
+</html>

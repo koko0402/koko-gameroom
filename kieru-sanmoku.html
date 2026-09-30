@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>消える三目並べ</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  /* 黄色いケースに黒い画面のおもちゃ風 */
+  :root, :root:not([data-theme="light"]) {
+    --ink: #f3ece4; --sub: #c9bcae; --board: #f5c518;
+    --p1: #ff4040; --p2: #3d7dff;
+  }
+  body {
+    background-color: #3b2a1f;
+    background-image:
+      repeating-linear-gradient(92deg, rgba(0,0,0,.18) 0 2px, transparent 2px 11px),
+      repeating-linear-gradient(88deg, rgba(255,255,255,.04) 0 1px, transparent 1px 29px),
+      linear-gradient(90deg, #3a281c, #4a3425 45%, #36261b);
+  }
+  .device {
+    background: linear-gradient(160deg, #ffd83d, #f2bb0c);
+    border-radius: 44px;
+    padding: 20px;
+    box-shadow: 0 10px 0 #ef7f1a, 0 18px 30px rgba(0,0,0,.45), inset 0 2px 0 rgba(255,255,255,.5);
+    max-width: 440px;
+    margin: 0 auto 10px;
+  }
+  .device svg { display: block; width: 100%; height: auto; touch-action: manipulation; user-select: none; }
+  .btn.on { color: #3b2a1f; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="index.html">← ゲーム一覧</a><h1>消える三目並べ</h1></div>
+  <p class="turn" id="turn"></p>
+  <div class="device"><svg id="svg" viewBox="0 0 300 300"></svg></div>
+  <div class="bar"><button class="btn" id="reset">最初から</button></div>
+  <details class="rules" open>
+    <summary>ルール</summary>
+    <ul>
+      <li>交代で1マスずつ置く。縦・横・斜めに3つそろえたら勝ち。</li>
+      <li>自分の印は3つまで。4つ目を置くと、一番古い印が消える。</li>
+      <li>次に消える印はうすく表示される。</li>
+    </ul>
+  </details>
+</div>
+<script src="online.js"></script>
+<script>
+const svg = document.getElementById('svg');
+const turnEl = document.getElementById('turn');
+const LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+const NAME = ['✕', '◯'];
+let marks, player, winner;
+
+function reset() { marks = [[], []]; player = 0; winner = null; draw(); }
+
+function owner(i) { return marks[0].includes(i) ? 0 : marks[1].includes(i) ? 1 : -1; }
+
+function play(i) {
+  if (winner !== null || owner(i) !== -1) return;
+  const m = marks[player];
+  m.push(i);
+  if (m.length > 3) m.shift();
+  if (LINES.some(l => l.every(x => m.includes(x)))) winner = player;
+  else player = 1 - player;
+  draw();
+}
+
+const DEFS = `<defs>
+  <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+    <feGaussianBlur stdDeviation="4" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <linearGradient id="screen" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#1c1c1f"/><stop offset="1" stop-color="#050506"/>
+  </linearGradient>
+</defs>`;
+
+function draw() {
+  let s = DEFS + `<rect width="300" height="300" rx="34" fill="url(#screen)"/>`;
+  s += `<g stroke="#9fdcff" stroke-width="4" stroke-linecap="round" filter="url(#glow)" opacity=".9">`;
+  for (let k = 1; k < 3; k++) {
+    s += `<line x1="${k*100}" y1="24" x2="${k*100}" y2="276"/><line x1="24" y1="${k*100}" x2="276" y2="${k*100}"/>`;
+  }
+  s += `</g>`;
+  for (let i = 0; i < 9; i++) {
+    const x = (i % 3) * 100 + 50, y = Math.floor(i / 3) * 100 + 50, o = owner(i);
+    const fading = winner === null && o === player && marks[o].length === 3 && marks[o][0] === i;
+    const op = fading ? 0.28 : 1;
+    if (o === 0) s += `<g stroke="var(--p1)" stroke-width="9" stroke-linecap="round" opacity="${op}" filter="url(#glow)"><line x1="${x-22}" y1="${y-22}" x2="${x+22}" y2="${y+22}"/><line x1="${x+22}" y1="${y-22}" x2="${x-22}" y2="${y+22}"/></g>`;
+    if (o === 1) s += `<g opacity="${op}" filter="url(#glow)"><circle cx="${x}" cy="${y}" r="24" fill="none" stroke="var(--p2)" stroke-width="9"/><circle cx="${x}" cy="${y}" r="24" fill="none" stroke="#bcd3ff" stroke-width="2"/></g>`;
+    s += `<rect x="${x-50}" y="${y-50}" width="100" height="100" fill="transparent" style="cursor:pointer" data-i="${i}"/>`;
+  }
+  svg.innerHTML = s;
+  Online.sync();
+  const who = winner ?? player;
+  turnEl.className = 'turn' + (winner !== null ? ' win' : '');
+  turnEl.innerHTML = `<span class="dot ${who ? 'p2' : 'p1'}"></span>` + (winner !== null ? `${NAME[winner]}の勝ち` : `${NAME[player]}の番`);
+}
+
+svg.addEventListener('click', e => { if (!Online.canAct()) return; const i = e.target.dataset.i; if (i !== undefined) play(+i); });
+document.getElementById('reset').onclick = reset;
+Online.init({ game: 'kieru', names: NAME,
+  getState: () => ({ marks, player, winner }),
+  setState: s => { ({ marks, player, winner } = s); draw(); },
+  turn: () => winner === null ? player : null });
+reset();
+</script>
+</body>
+</html>
