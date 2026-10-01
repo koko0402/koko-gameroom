@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>歌詞で曲あて</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&display=swap">
+<style>
+  /* クイズ番組のスタジオっぽい見た目。早押しボタンは大きく赤く */
+  :root, :root:not([data-theme="light"]) {
+    --table: #160f2e; --board: #241a4a; --line: #3d2f7a; --ink: #f4f0ff; --sub: #b4a9db;
+    --p1: #ff3b5c; --p2: #3bc9ff; --ok: #3ddc84;
+  }
+  body {
+    font-family: 'Zen Maru Gothic', 'M PLUS Rounded 1c', sans-serif;
+    background: #160f2e radial-gradient(ellipse at 50% -10%, #3b2a8a 0%, #160f2e 60%) no-repeat;
+  }
+  .btn.on { color: #160f2e; }
+  .panel { background: var(--board); border-radius: 16px; padding: 16px; margin-bottom: 12px; box-shadow: 0 0 0 2px var(--line); }
+  .panel h2 { margin: 0 0 8px; font-size: 19px; }
+  input[type=text], textarea {
+    width: 100%; font: inherit; color: var(--ink); background: #1a1338; border: 2px solid var(--line); border-radius: 10px; padding: 8px 10px;
+  }
+  textarea { min-height: 140px; resize: vertical; line-height: 1.7; }
+  label { display: block; font-weight: 700; margin: 10px 0 4px; }
+  .code { font-size: 34px; font-weight: 900; letter-spacing: .2em; color: #ffd84d; }
+  .lyrics { min-height: 150px; display: grid; gap: 6px; align-content: start; }
+  .lyrics p {
+    margin: 0; font-size: 21px; font-weight: 700; line-height: 1.5; padding: 6px 12px; border-radius: 10px;
+    background: rgba(255,255,255,.06);
+  }
+  .lyrics p.new { animation: pop .35s ease-out; }
+  .lyrics p.hidden { color: transparent; background: repeating-linear-gradient(90deg, rgba(255,255,255,.08) 0 14px, transparent 14px 20px); animation: none; }
+  @keyframes pop { from { opacity: 0; transform: translateY(6px); } }
+  .buzz {
+    display: block; width: min(220px, 70vw); aspect-ratio: 1; margin: 16px auto 6px; border-radius: 50%;
+    border: 0; cursor: pointer; font: 900 30px 'Zen Maru Gothic', sans-serif; color: #fff;
+    background: radial-gradient(circle at 40% 32%, #ff8da1, #ff3b5c 45%, #b3122f);
+    box-shadow: 0 12px 0 #7a0c20, 0 18px 30px rgba(0,0,0,.5);
+    transition: transform .06s, box-shadow .06s; -webkit-tap-highlight-color: transparent;
+  }
+  .buzz:active:not(:disabled) { transform: translateY(10px); box-shadow: 0 2px 0 #7a0c20, 0 6px 12px rgba(0,0,0,.5); }
+  .buzz:disabled { filter: grayscale(.85) brightness(.6); cursor: default; }
+  .who { text-align: center; font-size: 22px; font-weight: 900; color: #ffd84d; min-height: 1.5em; }
+  .scores { display: grid; gap: 6px; }
+  .scores div { display: flex; justify-content: space-between; padding: 6px 12px; border-radius: 10px; background: rgba(255,255,255,.06); }
+  .scores div.buzzed { background: #ffd84d; color: #160f2e; font-weight: 900; }
+  .scores div.out { opacity: .45; text-decoration: line-through; }
+  .answer { font-size: 26px; font-weight: 900; text-align: center; color: var(--ok); margin: 8px 0; }
+  .judge { font-size: 26px; font-weight: 900; text-align: center; margin: 6px 0; }
+  .judge.ok { color: var(--ok); } .judge.ng { color: var(--p1); }
+  .qlist { display: grid; gap: 6px; margin: 8px 0; }
+  .qlist div { display: flex; gap: 8px; align-items: center; padding: 6px 10px; border-radius: 10px; background: rgba(255,255,255,.06); }
+  .qlist div span { flex: 1; }
+  .note { color: var(--sub); }
+  .hide { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="index.html">← ゲーム一覧</a><h1>歌詞で曲あて</h1></div>
+  <div id="app"></div>
+  <details class="rules">
+    <summary>ルール</summary>
+    <ul>
+      <li>出題する人が部屋を作って、問題(曲名と歌詞)を書いておく。答える人は部屋のコードで入る。何人でもいい。</li>
+      <li>歌詞が1行ずつ出てくる。分かったら早押しボタン。一番早く押した人が答えられる。</li>
+      <li>出題者が正解か判定する。正解なら点。出てる行が少ないうちに当てるほど点が高い(1行目なら5点、2行目4点…最低1点)。</li>
+      <li>まちがえたら、その問題はもう押せない(お手つき)。歌詞の続きが出て、ほかの人が押せる。</li>
+      <li>歌詞は出題者が自分で書く。問題は出題者のブラウザにだけ保存されて、答えは出題者が出すまで答える人には届かない。</li>
+    </ul>
+  </details>
+</div>
+<script>
+const PEERJS = 'https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js';
+const KEY = 'koko-uta-ate-v1';
+const app = document.getElementById('app');
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const norm = s => String(s).normalize('NFKC').toLowerCase().replace(/[\s・、。!！?？「」『』()（）\-ー~〜]/g, '')
+  .replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
+
+function loadPeer() {
+  return new Promise((ok, ng) => {
+    if (window.Peer) return ok();
+    const s = document.createElement('script'); s.src = PEERJS; s.onload = ok; s.onerror = ng; document.head.appendChild(s);
+  });
+}
+const peerId = c => `kokogr-uta-${c}`.toLowerCase();
+
+let role = null;      // 'host' | 'guest'
+let msg = '';
+
+// ===================== 出題する人 =====================
+const H = {
+  peer: null, code: '', conns: {},        // id -> conn
+  players: [],                            // {id, name, score, online}
+  qs: [], qi: -1,                         // 問題と、今何問目か
+  shown: 0, phase: 'lobby',               // lobby / play / answering / reveal / end
+  buzz: null, out: [], last: null,        // last: {name, text, ok}
+  auto: 0, timer: null, editing: null,
+};
+function loadQs() { try { H.qs = JSON.parse(localStorage.getItem(KEY)) || []; } catch (e) { H.qs = []; } }
+function saveQs() { try { localStorage.setItem(KEY, JSON.stringify(H.qs)); } catch (e) {} }
+
+async function hostStart() {
+  role = 'host'; msg = '準備中…'; loadQs(); draw();
+  try { await loadPeer(); } catch (e) { msg = '部品を読み込めなかった。ネットを確認して'; return draw(); }
+  H.code = Array.from({ length: 4 }, () => 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 31)]).join('');
+  H.peer = new Peer(peerId(H.code));
+  H.peer.on('open', () => { msg = ''; draw(); });
+  H.peer.on('error', e => { msg = e.type === 'unavailable-id' ? 'コードがかぶった。ページを開き直して' : '接続エラー(' + e.type + ')'; draw(); });
+  H.peer.on('connection', c => {
+    c.on('data', d => hostRecv(c, d));
+    c.on('close', () => {
+      const p = H.players.find(p => p.id === H.connOf(c)); if (p) p.online = false;
+      if (H.buzz && H.buzz === H.connOf(c)) { H.buzz = null; H.phase = 'play'; }
+      hostUpdate();
+    });
+  });
+}
+H.connOf = c => Object.keys(H.conns).find(k => H.conns[k] === c);
+
+function hostRecv(c, d) {
+  if (d.t === 'join') {
+    // 名前と端末ごとの合言葉で、入り直しても同じ人として扱う
+    let p = H.players.find(p => p.id === d.id);
+    if (!p) { p = { id: d.id, name: d.name.slice(0, 12) || '名無し', score: 0, online: true }; H.players.push(p); }
+    p.online = true; p.name = d.name.slice(0, 12) || p.name;
+    if (H.conns[d.id] && H.conns[d.id] !== c) H.conns[d.id].close();
+    H.conns[d.id] = c;
+  }
+  const id = H.connOf(c); if (!id) return;
+  if (d.t === 'buzz' && H.phase === 'play' && !H.buzz && !H.out.includes(id)) {
+    H.buzz = id; H.phase = 'answering'; stopAuto();
+  }
+  if (d.t === 'answer' && H.phase === 'answering' && H.buzz === id) {
+    H.last = { id, name: nameOf(id), text: String(d.text).slice(0, 60), ok: null };
+  }
+  hostUpdate();
+}
+const nameOf = id => H.players.find(p => p.id === id)?.name || '?';
+const curQ = () => H.qs[H.qi];
+const lines = () => (curQ()?.lyrics || '').split('\n').map(s => s.trim()).filter(Boolean);
+
+// 答える人に送る内容。答えと、まだ出してない歌詞は入れない
+function publicState() {
+  const L = lines();
+  return {
+    phase: H.phase, qi: H.qi, total: H.qs.length,
+    lines: L.slice(0, H.shown), lineCount: L.length,
+    players: H.players.map(p => ({ id: p.id, name: p.name, score: p.score, online: p.online })),
+    buzz: H.buzz, out: H.out, last: H.last,
+    answer: H.phase === 'reveal' || H.phase === 'end' ? { title: curQ()?.title, artist: curQ()?.artist } : null,
+  };
+}
+function hostUpdate() {
+  const s = publicState();
+  for (const c of Object.values(H.conns)) if (c.open) c.send({ t: 'state', s });
+  // 問題を書いてる途中は、参加者の欄だけ書きかえる(入力中の文字を乱さないため)
+  const box = document.getElementById('h-players');
+  if (H.phase === 'lobby' && H.editing && box) box.outerHTML = playersPanel();
+  else draw();
+}
+
+function nextQ() {
+  H.qi++; H.buzz = null; H.out = []; H.last = null;
+  if (H.qi >= H.qs.length) { H.phase = 'end'; H.qi = H.qs.length - 1; stopAuto(); return hostUpdate(); }
+  H.shown = 1; H.phase = 'play'; startAuto(); hostUpdate();
+}
+function showMore() { if (H.shown < lines().length) { H.shown++; hostUpdate(); } else stopAuto(); }
+function startAuto() { stopAuto(); if (H.auto) H.timer = setInterval(() => { if (H.phase === 'play') showMore(); }, H.auto * 1000); }
+function stopAuto() { clearInterval(H.timer); H.timer = null; }
+function judge(ok) {
+  if (H.phase !== 'answering') return;
+  const p = H.players.find(p => p.id === H.buzz);
+  if (ok) {
+    const pts = Math.max(1, 6 - H.shown);
+    p.score += pts; H.last = { ...(H.last || { name: p.name, text: '(口頭)' }), ok: true, pts };
+    H.buzz = null; H.phase = 'reveal'; H.shown = lines().length;
+  } else {
+    H.last = { ...(H.last || { name: p.name, text: '(口頭)' }), ok: false };
+    H.out.push(H.buzz); H.buzz = null; H.phase = 'play';
+    showMore(); startAuto();
+    if (H.players.filter(p => p.online).every(p => H.out.includes(p.id))) { H.phase = 'reveal'; H.shown = lines().length; stopAuto(); }
+  }
+  hostUpdate();
+}
+function reveal() { stopAuto(); H.buzz = null; H.phase = 'reveal'; H.shown = lines().length; hostUpdate(); }
+
+function hostView() {
+  const link = `${location.origin}${location.pathname}?room=${H.code}`;
+  let h = `<div class="panel"><h2>出題する人</h2>` +
+    (H.code ? `<p>部屋のコード <span class="code">${H.code}</span></p><div class="bar"><button class="btn" data-h="copy" data-link="${esc(link)}">招待リンクをコピー</button></div>` : '') +
+    `<p class="note">${esc(msg) || '答える人はこのコードで入る。'}</p></div>`;
+
+  h += playersPanel();
+
+  if (H.phase === 'lobby') {
+    h += questionEditor();
+    h += `<div class="panel"><label>歌詞を自動で出す間隔</label><div class="bar" style="margin-top:0">` +
+      [0, 5, 8, 12].map(n => `<button class="btn ${H.auto === n ? 'on' : ''}" data-auto="${n}">${n ? n + '秒' : '手動'}</button>`).join('') + `</div>` +
+      `<div class="bar"><button class="btn" data-h="start" ${H.qs.length && H.players.length ? '' : 'disabled'}>はじめる</button></div>` +
+      `<p class="note">${!H.qs.length ? '問題を1つ以上作って' : !H.players.length ? '答える人が入るのを待ってる' : `${H.qs.length}問で始める`}</p></div>`;
+    return h;
+  }
+  const L = lines(), q = curQ();
+  h += `<div class="panel"><h2>第${H.qi + 1}問 / ${H.qs.length}問</h2>` +
+    `<p class="note">答え: <b style="color:var(--ink)">${esc(q.title)}</b>${q.artist ? '(' + esc(q.artist) + ')' : ''}</p>` +
+    `<div class="lyrics">${L.map((t, i) => `<p style="${i < H.shown ? '' : 'opacity:.35'}">${esc(t)}</p>`).join('')}</div>`;
+  if (H.phase === 'play') {
+    h += `<div class="bar"><button class="btn" data-h="more" ${H.shown >= L.length ? 'disabled' : ''}>次の行を出す(${H.shown}/${L.length})</button><button class="btn" data-h="reveal">答えを出す</button></div>`;
+    if (H.last && H.last.ok === false) h += `<p class="judge ng">${esc(H.last.name)}「${esc(H.last.text)}」は不正解</p>`;
+  }
+  if (H.phase === 'answering') {
+    const hint = H.last && H.last.id === H.buzz ? (H.last.text) : null;
+    const auto = hint && [q.title, ...(q.alt || '').split(/[,、]/)].some(a => a.trim() && norm(a) === norm(hint));
+    h += `<p class="who">${esc(nameOf(H.buzz))}が押した!</p>` +
+      (hint ? `<p class="answer" style="color:#ffd84d">「${esc(hint)}」</p><p class="note" style="text-align:center">${auto ? '答えと一致してる' : '答えと完全には一致してない。言い方の違いなら正解にしていい'}</p>`
+        : `<p class="note" style="text-align:center">答えを入力中…(口で言ってもらってもいい)</p>`) +
+      `<div class="bar" style="justify-content:center"><button class="btn" data-h="ok">正解</button><button class="btn" data-h="ng">不正解</button></div>`;
+  }
+  if (H.phase === 'reveal' || H.phase === 'end') {
+    if (H.last && H.last.ok) h += `<p class="judge ok">${esc(H.last.name)} 正解! +${H.last.pts}点</p>`;
+    h += `<div class="bar">` + (H.phase === 'end' ? `<button class="btn" data-h="lobby">問題を作り直す</button>` : `<button class="btn" data-h="next">${H.qi + 1 < H.qs.length ? '次の問題へ' : '結果発表'}</button>`) + `</div>`;
+  }
+  return h + `</div>`;
+}
+
+function playersPanel() {
+  return `<div class="panel" id="h-players"><h2>答える人(${H.players.filter(p => p.online).length}人)</h2><div class="scores">` +
+    (H.players.length ? [...H.players].sort((a, b) => b.score - a.score).map(p =>
+      `<div class="${p.id === H.buzz ? 'buzzed' : H.out.includes(p.id) ? 'out' : ''}"><span>${esc(p.name)}${p.online ? '' : '(切断)'}</span><b>${p.score}点</b></div>`).join('')
+      : '<p class="note">まだ誰もいない</p>') + `</div></div>`;
+}
+
+function questionEditor() {
+  const e = H.editing;
+  let h = `<div class="panel"><h2>問題(${H.qs.length}問)</h2><div class="qlist">` +
+    H.qs.map((q, i) => `<div><span>${i + 1}. ${esc(q.title)}${q.artist ? ' / ' + esc(q.artist) : ''}<span class="note">(${q.lyrics.split('\n').filter(s => s.trim()).length}行)</span></span>` +
+      `<button class="btn" data-edit="${i}">直す</button><button class="btn" data-delq="${i}">消す</button></div>`).join('') + `</div>`;
+  if (e) {
+    h += `<label>曲名(答え)</label><input type="text" id="q-title" value="${esc(e.title)}">` +
+      `<label>歌手・アーティスト(なくてもいい)</label><input type="text" id="q-artist" value="${esc(e.artist)}">` +
+      `<label>ほかの正解(なくてもいい。カンマ区切り)</label><input type="text" id="q-alt" value="${esc(e.alt)}" placeholder="略し方、英語名など">` +
+      `<label>歌詞(1行ずつ出る。分かりにくい行から順に書くと盛り上がる)</label><textarea id="q-lyrics">${esc(e.lyrics)}</textarea>` +
+      `<div class="bar"><button class="btn" data-h="saveq">この問題を保存</button><button class="btn" data-h="cancelq">やめる</button></div>`;
+  } else h += `<div class="bar"><button class="btn" data-h="newq">+ 問題を作る</button></div>`;
+  return h + `<p class="note">問題はこのブラウザにだけ保存される。答える人には、出した歌詞しか届かない。</p></div>`;
+}
+
+// ===================== 答える人 =====================
+const G = { peer: null, conn: null, s: null, name: '', id: '', typing: '', seen: 0 };
+
+async function guestJoin(code, name) {
+  code = code.trim().toUpperCase(); name = name.trim();
+  if (!/^[A-Z0-9]{4}$/.test(code)) { msg = 'コードは4文字'; return draw(); }
+  if (!name) { msg = '名前を入れて'; return draw(); }
+  role = 'guest'; G.name = name; msg = 'つないでる…'; draw();
+  try { localStorage.setItem(KEY + '-name', name); } catch (e) {}
+  try { G.id = localStorage.getItem(KEY + '-id') || ''; } catch (e) {}
+  if (!G.id) { G.id = Math.random().toString(36).slice(2, 10); try { localStorage.setItem(KEY + '-id', G.id); } catch (e) {} }
+  try { await loadPeer(); } catch (e) { msg = '部品を読み込めなかった。ネットを確認して'; return draw(); }
+  G.peer = new Peer();
+  G.peer.on('open', () => {
+    G.conn = G.peer.connect(peerId(code), { reliable: true });
+    G.conn.on('open', () => { G.conn.send({ t: 'join', id: G.id, name }); msg = ''; });
+    G.conn.on('data', d => { if (d.t === 'state') { const prev = G.s; G.s = d.s; if (!prev || prev.qi !== G.s.qi) { G.typing = ''; G.seen = 0; } draw(); } });
+    G.conn.on('close', () => { msg = '出題する人との接続が切れた。同じコードで入り直せば続きから参加できる'; draw(); });
+    setTimeout(() => { if (!G.s) { msg = 'つながらない。コードが合ってるか確認して'; draw(); } }, 10000);
+  });
+  G.peer.on('error', e => { msg = e.type === 'peer-unavailable' ? 'その部屋が見つからない。コードを確認して' : '接続エラー(' + e.type + ')'; draw(); });
+}
+
+function guestView() {
+  const s = G.s;
+  if (!s) return `<div class="panel"><p>${esc(msg || 'つないでる…')}</p></div>`;
+  const me = s.players.find(p => p.id === G.id);
+  let h = msg ? `<div class="panel"><p class="note">${esc(msg)}</p></div>` : '';
+  if (s.phase === 'lobby') {
+    return h + `<div class="panel"><h2>${esc(G.name)}で参加中</h2><p>出題する人が始めるのを待ってる…</p>${scoreList(s)}</div>`;
+  }
+  h += `<div class="panel"><h2>第${s.qi + 1}問 / ${s.total}問　<span class="note">${me ? me.score + '点' : ''}</span></h2><div class="lyrics">` +
+    s.lines.map((t, i) => `<p class="${i >= G.seen ? 'new' : ''}">${esc(t)}</p>`).join('') +
+    Array.from({ length: s.lineCount - s.lines.length }, () => `<p class="hidden">.</p>`).join('') + `</div>`;
+  const out = s.out.includes(G.id), mine = s.buzz === G.id;
+  if (s.phase === 'play') {
+    h += `<button class="buzz" data-g="buzz" ${out ? 'disabled' : ''}>${out ? 'お手つき' : '押す!'}</button>` +
+      (s.last && s.last.ok === false ? `<p class="judge ng">${esc(s.last.name)}「${esc(s.last.text)}」は不正解</p>` : '');
+  } else if (s.phase === 'answering') {
+    h += `<p class="who">${mine ? 'あなたが一番! 答えを入れて' : esc(s.players.find(p => p.id === s.buzz)?.name) + 'が押した!'}</p>`;
+    if (mine) {
+      const sent = s.last && s.last.id === G.id;
+      h += sent ? `<p class="answer" style="color:#ffd84d">「${esc(s.last.text)}」で判定待ち…</p>`
+        : `<div class="row" style="display:flex;gap:8px"><input type="text" id="g-ans" value="${esc(G.typing)}" placeholder="曲名" autocomplete="off"><button class="btn" data-g="send">答える</button></div>`;
+    }
+  } else if (s.phase === 'reveal' || s.phase === 'end') {
+    if (s.last && s.last.ok) h += `<p class="judge ok">${esc(s.last.name)} 正解! +${s.last.pts}点</p>`;
+    if (s.answer) h += `<p class="answer">${esc(s.answer.title)}</p>${s.answer.artist ? `<p class="note" style="text-align:center">${esc(s.answer.artist)}</p>` : ''}`;
+    if (s.phase !== 'end') h += `<p class="note" style="text-align:center">次の問題を待ってる…</p>`;
+  }
+  G.seen = s.lines.length;
+  h += `</div>`;
+  if (s.phase === 'end') h += `<div class="panel"><h2>結果</h2>${scoreList(s)}</div>`;
+  else h += `<div class="panel">${scoreList(s)}</div>`;
+  return h;
+}
+function scoreList(s) {
+  return `<div class="scores">` + [...s.players].sort((a, b) => b.score - a.score).map((p, i) =>
+    `<div class="${p.id === s.buzz ? 'buzzed' : s.out.includes(p.id) ? 'out' : ''}"><span>${s.phase === 'end' ? (i + 1) + '位 ' : ''}${esc(p.name)}${p.id === G.id ? '(自分)' : ''}${p.online ? '' : '(切断)'}</span><b>${p.score}点</b></div>`).join('') + `</div>`;
+}
+
+// ===================== 最初の画面 =====================
+function startView() {
+  const q = new URLSearchParams(location.search).get('room') || '';
+  let name = ''; try { name = localStorage.getItem(KEY + '-name') || ''; } catch (e) {}
+  return `<div class="panel"><h2>答える</h2><label>名前</label><input type="text" id="s-name" maxlength="12" value="${esc(name)}">` +
+    `<label>部屋のコード</label><input type="text" id="s-code" maxlength="4" value="${esc(q)}" style="text-transform:uppercase">` +
+    `<div class="bar"><button class="btn" data-s="join">入る</button></div><p class="note">${esc(msg)}</p></div>` +
+    `<div class="panel"><h2>出題する</h2><p class="note">部屋を作って、曲名と歌詞を書いて出題する。</p><div class="bar"><button class="btn" data-s="host">部屋を作る</button></div></div>`;
+}
+
+function draw() {
+  // 入力中の文字が消えないように取っておく
+  const keep = id => document.getElementById(id)?.value;
+  if (H.editing && document.getElementById('q-title')) {
+    H.editing = { ...H.editing, title: keep('q-title'), artist: keep('q-artist'), alt: keep('q-alt'), lyrics: keep('q-lyrics') };
+  }
+  const ans = keep('g-ans'); if (ans !== undefined) G.typing = ans;
+  const focus = document.activeElement?.id;
+  app.innerHTML = role === 'host' ? hostView() : role === 'guest' ? guestView() : startView();
+  const f = (focus && document.getElementById(focus)) || document.getElementById('g-ans');
+  if (f) { f.focus(); if (f.setSelectionRange && f.value) f.setSelectionRange(f.value.length, f.value.length); }
+}
+
+app.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b || b.disabled) return;
+  const d = b.dataset;
+  if (d.s === 'host') hostStart();
+  if (d.s === 'join') guestJoin(document.getElementById('s-code').value, document.getElementById('s-name').value);
+  if (d.g === 'buzz' && G.conn?.open) G.conn.send({ t: 'buzz' });
+  if (d.g === 'send') { const v = document.getElementById('g-ans').value.trim(); if (v && G.conn?.open) G.conn.send({ t: 'answer', text: v }); }
+  if (d.h === 'copy') {
+    const t = d.link;
+    (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => { msg = 'リンクをコピーした。友達に送って'; draw(); }, () => { msg = 'このリンクを送って: ' + t; draw(); });
+  }
+  if (d.h === 'newq') { H.editing = { i: -1, title: '', artist: '', alt: '', lyrics: '' }; draw(); }
+  if (d.edit !== undefined) { const q = H.qs[+d.edit]; H.editing = { i: +d.edit, ...q }; draw(); }
+  if (d.delq !== undefined) { if (confirm('この問題を消す?')) { H.qs.splice(+d.delq, 1); saveQs(); draw(); } }
+  if (d.h === 'saveq') {
+    draw(); // 入力内容を拾う
+    const q = H.editing;
+    if (!q.title.trim() || !q.lyrics.trim()) { alert('曲名と歌詞を入れて'); return; }
+    const item = { title: q.title.trim(), artist: q.artist.trim(), alt: q.alt.trim(), lyrics: q.lyrics.trim() };
+    if (q.i >= 0) H.qs[q.i] = item; else H.qs.push(item);
+    H.editing = null; saveQs(); draw();
+  }
+  if (d.h === 'cancelq') { H.editing = null; draw(); }
+  if (d.auto !== undefined) { H.auto = +d.auto; draw(); }
+  if (d.h === 'start') { H.players.forEach(p => p.score = 0); H.qi = -1; nextQ(); }
+  if (d.h === 'more') showMore();
+  if (d.h === 'reveal') reveal();
+  if (d.h === 'ok') judge(true);
+  if (d.h === 'ng') judge(false);
+  if (d.h === 'next') nextQ();
+  if (d.h === 'lobby') { H.phase = 'lobby'; H.qi = -1; H.buzz = null; H.out = []; H.last = null; hostUpdate(); }
+});
+app.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  if (e.target.id === 'g-ans') app.querySelector('[data-g=send]')?.click();
+  if (e.target.id === 's-code' || e.target.id === 's-name') app.querySelector('[data-s=join]')?.click();
+});
+// スペースキーでも早押しできる(PC用)
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' && role === 'guest' && !/INPUT|TEXTAREA/.test(document.activeElement?.tagName)) {
+    const b = app.querySelector('[data-g=buzz]'); if (b && !b.disabled) { e.preventDefault(); b.click(); }
+  }
+});
+window.addEventListener('beforeunload', e => { if (role === 'host' && H.players.length) { e.preventDefault(); e.returnValue = ''; } });
+draw();
+</script>
+</body>
+</html>
