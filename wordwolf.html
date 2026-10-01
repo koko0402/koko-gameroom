@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ワードウルフ</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;800;900&display=swap">
+<link rel="stylesheet" href="room.css">
+<style>
+  /* 夜の森。カードは月明かりの紙 */
+  :root {
+    --bg1: #1f2a44; --bg2: #3d4f7a; --card: #f3f1e7; --edge: #2c3a5e; --ink: #232a3d;
+    --accent: linear-gradient(135deg, #2c3a5e 0%, #4a5f94 100%); --sub-btn: #c9cfe0; --big: linear-gradient(135deg, #4a5f94 0%, #1f2a44 100%);
+  }
+  .timer { text-align: center; font-size: 44px; font-weight: 900; font-variant-numeric: tabular-nums; margin: 6px 0; }
+  .timer.low { color: #c62828; }
+  .role { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 800; color: #fff; margin-left: 6px; }
+  .role.citizen { background: #4a7bd0; } .role.wolf { background: #c62828; } .role.fox { background: #e08a1e; } .role.gm { background: #777; }
+  .votes { font-size: 13px; color: #666; }
+  .win { color: #2e7d32; } .lose { color: #c62828; }
+</style>
+</head>
+<body>
+<a class="home" href="index.html">← ゲーム一覧</a>
+<div id="app"></div>
+<details class="rules">
+  <summary>ルール</summary>
+  <ul>
+    <li>3人以上で遊ぶ。最初に部屋IDを入れた人がホストになる。</li>
+    <li>みんなにお題(言葉)が1つずつ配られる。ほとんどの人は同じお題だけど、少数派の「ウルフ」だけ少しちがうお題になってる。</li>
+    <li>自分がウルフかどうかは、自分でも分からない。お題について話しながら、誰がちがうお題か探す。</li>
+    <li>話し合いのあと、全員で「ウルフだと思う人」に投票する。一番票が多い人が追放される。同じ票なら、その人たちの中でもう一度投票する。</li>
+    <li>ウルフを追放できたら市民の勝ち。ただしウルフは最後に市民のお題を当てられたら逆転勝ち。ウルフ以外を追放したらウルフの勝ち。</li>
+    <li>キツネ(人数が多いときに入れられる): お題が配られない。分かってるふりをして、最後まで追放されなければキツネも勝ち。キツネが追放されたらウルフの勝ち。</li>
+    <li>お題は「おまかせ」で用意したものから選ぶか、「自分たちで決める」でお題係が書く。お題係は答えを知ってるので、その回は進行役になって参加しない。</li>
+  </ul>
+</details>
+<script src="room.js"></script>
+<script>
+// 市民のお題とウルフのお題。どっちが多数派になるかは毎回ランダム
+const PAIRS = [
+  ['りんご', 'みかん'], ['海', 'プール'], ['犬', '猫'], ['ラーメン', 'うどん'], ['夏', '冬'], ['電車', 'バス'],
+  ['映画館', 'カラオケ'], ['コーヒー', '紅茶'], ['スマホ', 'パソコン'], ['遊園地', '動物園'], ['誕生日', 'クリスマス'],
+  ['お寿司', '焼肉'], ['サッカー', 'バスケ'], ['図書館', '本屋'], ['雪', '雨'], ['朝ごはん', '晩ごはん'],
+  ['先生', 'お医者さん'], ['ピアノ', 'ギター'], ['カレー', 'シチュー'], ['富士山', '東京タワー'], ['お風呂', 'シャワー'],
+  ['チョコ', 'アイス'], ['修学旅行', '遠足'], ['ハンバーガー', 'ピザ'], ['新幹線', '飛行機'], ['コンビニ', 'スーパー'],
+  ['YouTube', 'テレビ'], ['ペンギン', 'パンダ'], ['花火', 'お祭り'], ['枕', '布団'], ['イヤホン', 'スピーカー'],
+  ['体育祭', '文化祭'], ['ケーキ', 'プリン'], ['宿題', 'テスト'], ['自転車', 'スケボー'], ['水族館', '博物館'],
+  ['卵焼き', '目玉焼き'], ['ゲームセンター', 'ボウリング'], ['お正月', 'お盆'], ['たこ焼き', 'お好み焼き'],
+];
+const ROLE_NAME = { citizen: '市民', wolf: 'ウルフ', fox: 'キツネ', gm: '進行役' };
+const esc = Room.esc;
+const norm = s => String(s).normalize('NFKC').toLowerCase().replace(/[\s・、。!！?？「」]/g, '')
+  .replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
+
+const newState = () => ({
+  phase: 'lobby', mode: 'auto', wolves: 1, fox: null, minutes: 3, writer: null,
+  words: null, roles: {}, endsAt: 0, votes: {}, candidates: null, runoff: false,
+  executed: null, guess: '', guessOk: null, winner: null, foxWin: false, round: 0,
+});
+
+// ホストの中だけで使う、今の参加者
+let PL = () => Room.players();
+const participants = S => Object.keys(S.roles).filter(id => S.roles[id] !== 'gm');
+
+function deal(S) {
+  const ids = PL().map(p => p.id).filter(id => id !== (S.mode === 'custom' ? S.writer : null));
+  const shuffled = ids.sort(() => Math.random() - .5);
+  S.roles = {};
+  if (S.mode === 'custom') S.roles[S.writer] = 'gm';
+  shuffled.forEach((id, i) => S.roles[id] = i < S.wolves ? 'wolf' : (S.fox && i === S.wolves) ? 'fox' : 'citizen');
+  S.votes = {}; S.candidates = null; S.runoff = false; S.executed = null; S.guess = ''; S.guessOk = null; S.winner = null; S.foxWin = false;
+  S.endsAt = Date.now() + S.minutes * 60000; S.phase = 'talk'; S.round++;
+}
+
+function tally(S) {
+  const vs = participants(S);
+  if (!vs.every(id => S.votes[id] || !PL().find(p => p.id === id)?.online)) return;
+  const count = {};
+  Object.values(S.votes).forEach(t => count[t] = (count[t] || 0) + 1);
+  const max = Math.max(...Object.values(count));
+  const top = Object.keys(count).filter(k => count[k] === max);
+  S.lastCount = count;
+  if (top.length > 1 && !S.runoff) { S.candidates = top; S.runoff = true; S.votes = {}; return; }
+  S.executed = top.length === 1 ? top[0] : null;
+  const role = S.roles[S.executed];
+  if (role === 'wolf') { S.phase = 'guess'; return; }
+  finish(S, 'wolf');
+}
+function finish(S, winner) {
+  S.winner = winner;
+  S.foxWin = Object.values(S.roles).includes('fox') && S.roles[S.executed] !== 'fox';
+  S.phase = 'result';
+}
+
+function onAction(S, pid, a) {
+  const host = pid === PL()[0]?.id;
+  if (a.t === 'tick' && host && S.phase === 'talk' && Date.now() >= S.endsAt) { S.phase = 'vote'; }
+  if (host && a.t === 'toSetup' && PL().length >= 3) { S.phase = 'setup'; if (S.fox === null) S.fox = PL().length >= 6; }
+  if (host && a.t === 'set' && S.phase === 'setup') {
+    for (const k of ['mode', 'wolves', 'fox', 'minutes', 'writer']) if (k in a) S[k] = a[k];
+  }
+  if (host && a.t === 'start' && S.phase === 'setup') {
+    const n = PL().length - (S.mode === 'custom' ? 1 : 0);
+    if (n < 3 || n - S.wolves - (S.fox ? 1 : 0) <= S.wolves) return;
+    if (S.mode === 'auto') {
+      const [x, y] = PAIRS[Math.floor(Math.random() * PAIRS.length)];
+      S.words = Math.random() < .5 ? { citizen: x, wolf: y } : { citizen: y, wolf: x };
+      deal(S);
+    } else { if (!S.writer || !PL().some(p => p.id === S.writer)) S.writer = pid; S.phase = 'writing'; }
+  }
+  if (a.t === 'words' && S.phase === 'writing' && pid === S.writer) {
+    const c = String(a.citizen || '').trim().slice(0, 20), w = String(a.wolf || '').trim().slice(0, 20);
+    if (!c || !w || c === w) return;
+    S.words = { citizen: c, wolf: w }; deal(S);
+  }
+  if (host && a.t === 'toVote' && S.phase === 'talk') S.phase = 'vote';
+  if (a.t === 'more' && host && S.phase === 'talk') S.endsAt += 60000;
+  if (a.t === 'vote' && S.phase === 'vote' && S.roles[pid] && S.roles[pid] !== 'gm' && !S.votes[pid] && a.target !== pid && S.roles[a.target] && S.roles[a.target] !== 'gm') {
+    if (S.candidates && !S.candidates.includes(a.target)) return;
+    S.votes[pid] = a.target; tally(S);
+  }
+  if (host && a.t === 'closeVote' && S.phase === 'vote' && Object.keys(S.votes).length) {
+    participants(S).forEach(id => { if (!S.votes[id]) S.votes[id] = '__skip'; });
+    const real = Object.fromEntries(Object.entries(S.votes).filter(([, t]) => t !== '__skip'));
+    S.votes = real;
+    const save = PL; PL = () => save().map(p => ({ ...p, online: false })); tally(S); PL = save;
+  }
+  if (a.t === 'guess' && S.phase === 'guess' && pid === S.executed && !S.guess) S.guess = String(a.text || '').trim().slice(0, 20);
+  if (host && a.t === 'judge' && S.phase === 'guess' && S.guess) { S.guessOk = !!a.ok; finish(S, a.ok ? 'wolf' : 'citizen'); }
+  if (host && a.t === 'again' && S.phase === 'result') S.phase = 'setup';
+}
+
+// その人に見せていい分だけ
+function view(S, pid) {
+  const v = { phase: S.phase, mode: S.mode, wolves: S.wolves, fox: S.fox, minutes: S.minutes, writer: S.writer, round: S.round,
+    left: Math.max(0, S.endsAt - Date.now()), candidates: S.candidates, runoff: S.runoff,
+    voted: Object.keys(S.votes), myVote: S.votes[pid] || null, participants: participants(S),
+    executed: S.executed, guess: S.guess, guessOk: S.guessOk, myRole: S.roles[pid] || null };
+  if (S.roles[pid] === 'citizen') v.myWord = S.words.citizen;
+  if (S.roles[pid] === 'wolf') v.myWord = S.words.wolf;
+  if (S.roles[pid] === 'gm') v.words = S.words;
+  if (S.phase === 'guess' && S.roles[pid] === 'gm') v.words = S.words;
+  if (S.phase === 'guess' && pid === PL()[0]?.id) v.citizenWord = S.words.citizen; // ホストが判定するため
+  if (S.phase === 'result') { v.words = S.words; v.roles = S.roles; v.votes = S.votes; v.count = S.lastCount; v.winner = S.winner; v.foxWin = S.foxWin; }
+  return v;
+}
+
+let localEnd = 0;
+function render(v) {
+  const app = document.getElementById('app');
+  const isHost = v.me === v.hostId, n = v.players.length;
+  let h = `<div class="screen"><h1>ワードウルフ</h1>`;
+  if (v.phase === 'lobby') {
+    h += `<div class="info-box">部屋ID: <strong>${esc(v.roomId)}</strong>　友達にこの番号を教えて</div>` + Room.playersList(v) +
+      (isHost ? `<button class="btn-primary" data-a="toSetup" ${n >= 3 ? '' : 'disabled'}>ゲーム設定へ</button>${n < 3 ? '<p class="note">3人以上必要</p>' : ''}`
+        : `<div class="wait-message">ホストが始めるのを待ってる…</div>`);
+  } else if (v.phase === 'setup') {
+    if (!isHost) h += `<div class="wait-message">ホストが設定中、少し待ってね</div>` + Room.playersList(v);
+    else {
+      const play = n - (v.mode === 'custom' ? 1 : 0);
+      const citizens = play - v.wolves - (v.fox ? 1 : 0);
+      const ok = play >= 3 && citizens > v.wolves;
+      h += `<label>お題</label><div class="chips">` +
+        `<button class="chip ${v.mode === 'auto' ? 'on' : ''}" data-set='{"mode":"auto"}'>おまかせ</button>` +
+        `<button class="chip ${v.mode === 'custom' ? 'on' : ''}" data-set='{"mode":"custom"}'>自分たちで決める</button></div>`;
+      if (v.mode === 'custom') {
+        h += `<label>お題係(お題を書いて、進行役になる人)</label><div class="chips">` +
+          v.players.map(p => `<button class="chip ${(v.writer || v.hostId) === p.id ? 'on' : ''}" data-set='{"writer":"${p.id}"}'>${p.icon}${esc(p.name)}</button>`).join('') + `</div>`;
+      }
+      h += `<label>ウルフの人数</label><div class="chips">` + [1, 2].map(k => `<button class="chip ${v.wolves === k ? 'on' : ''}" data-set='{"wolves":${k}}'>${k}人</button>`).join('') + `</div>` +
+        `<label>キツネ</label><div class="chips">` + [[false, 'なし'], [true, 'あり']].map(([k, t]) => `<button class="chip ${!!v.fox === k ? 'on' : ''}" data-set='{"fox":${k}}'>${t}</button>`).join('') + `</div>` +
+        `<label>話し合いの時間</label><div class="chips">` + [2, 3, 4, 5].map(k => `<button class="chip ${v.minutes === k ? 'on' : ''}" data-set='{"minutes":${k}}'>${k}分</button>`).join('') + `</div>` +
+        `<div class="info-box">参加${play}人: 市民${Math.max(0, citizens)}・ウルフ${v.wolves}${v.fox ? '・キツネ1' : ''}${v.mode === 'custom' ? '・進行役1' : ''}` +
+        (ok ? '' : `<br><b>人数が足りない。市民がウルフより多くないとだめ</b>`) + `</div>` +
+        `<button class="btn-primary" data-a="start" ${ok ? '' : 'disabled'}>ゲーム開始</button>`;
+    }
+  } else if (v.phase === 'writing') {
+    if (v.me === v.writer) {
+      h += `<h2>お題を決めて</h2><p class="note" style="margin-bottom:12px">似てるけど少しちがう2つの言葉にすると盛り上がる。あなたは進行役になって、今回は参加しない。</p>` +
+        `<label>多数派(市民)のお題</label><input type="text" id="w-c" maxlength="20" placeholder="例: りんご">` +
+        `<label>少数派(ウルフ)のお題</label><input type="text" id="w-w" maxlength="20" placeholder="例: なし">` +
+        `<button class="btn-primary" data-a="words">これで配る</button>`;
+    } else h += `<div class="wait-message">${Room.who(v, v.writer)}がお題を考えてる…</div>`;
+  } else if (v.phase === 'talk' || v.phase === 'vote' || v.phase === 'guess') {
+    h += myCard(v);
+    if (v.phase === 'talk') {
+      localEnd = Date.now() + v.left;
+      h += `<div class="timer" id="timer"></div><div class="info-box">お題について話して、ちがうお題の人を探す。言葉そのものは言わないこと。</div>` +
+        (isHost ? `<div class="row2"><button class="btn-secondary" data-a="more">1分のばす</button><button class="btn-primary" data-a="toVote">投票へ</button></div>` : '');
+    }
+    if (v.phase === 'vote') {
+      const canVote = v.participants.includes(v.me);
+      h += `<h2>${v.runoff ? '同じ票だったので、もう一度投票' : 'ウルフだと思う人に投票'}(${v.voted.length}/${v.participants.length})</h2>`;
+      if (canVote && !v.myVote) {
+        h += v.players.filter(p => v.participants.includes(p.id) && p.id !== v.me && (!v.candidates || v.candidates.includes(p.id)))
+          .map(p => `<div class="player-item" data-vote="${p.id}" style="cursor:pointer"><div><span class="player-icon">${p.icon}</span>${esc(p.name)}</div><div>投票する</div></div>`).join('');
+      } else h += `<div class="wait-message">${canVote ? `${Room.who(v, v.myVote)}に投票した。` : ''}みんなの投票を待ってる…</div>`;
+      if (isHost && v.voted.length) h += `<button class="btn-secondary" data-a="closeVote">投票してない人がいても締め切る</button>`;
+    }
+    if (v.phase === 'guess') {
+      h += `<div class="result-message" style="font-size:28px">${Room.who(v, v.executed)}が追放された</div>`;
+      if (v.me === v.executed) {
+        h += v.guess ? `<div class="wait-message">「${esc(v.guess)}」と答えた。判定を待ってる…</div>`
+          : `<div class="info-box">あなたはウルフだった。市民のお題を当てれば逆転勝ち!</div><input type="text" id="g-t" maxlength="20" placeholder="市民のお題は?"><button class="btn-primary" data-a="guess">答える</button>`;
+      } else h += `<div class="wait-message">ウルフだった! 市民のお題を当てたら逆転…</div>`;
+      if (isHost && v.guess) {
+        const auto = norm(v.guess) === norm(v.citizenWord);
+        h += `<div class="info-box">答え「${esc(v.guess)}」/ 市民のお題「${esc(v.citizenWord)}」<br>${auto ? '一致してる' : '完全には一致してない。言い方の違いなら正解にしていい'}</div>` +
+          `<div class="row2"><button class="btn-primary" data-judge="1">正解</button><button class="btn-danger" data-judge="0">不正解</button></div>`;
+      }
+    }
+  } else if (v.phase === 'result') {
+    const myRole = v.roles[v.me];
+    const iWin = myRole === 'gm' ? null : myRole === 'fox' ? v.foxWin : myRole === v.winner;
+    h += `<div class="result-message ${v.winner === 'citizen' ? '' : 'lose'}">${v.winner === 'citizen' ? '市民の勝ち' : 'ウルフの勝ち'}</div>` +
+      (v.foxWin ? `<p style="text-align:center;font-weight:800;color:#e08a1e;margin-top:-10px">キツネも勝ち</p>` : '') +
+      (iWin !== null ? `<p style="text-align:center;font-weight:800" class="${iWin ? 'win' : 'lose'}">あなたは${iWin ? '勝ち' : '負け'}</p>` : '') +
+      `<div class="info-box">市民のお題: <strong>${esc(v.words.citizen)}</strong><br>ウルフのお題: <strong>${esc(v.words.wolf)}</strong>` +
+      (v.executed ? `<br>追放: ${Room.who(v, v.executed)}` : '<br>同じ票のままで、誰も追放されなかった') +
+      (v.guess ? `<br>ウルフの答え: 「${esc(v.guess)}」→ ${v.guessOk ? '正解(逆転)' : '不正解'}` : '') + `</div>` +
+      `<h2>みんなの役</h2>` + v.players.filter(p => v.roles[p.id]).map(p => {
+        const r = v.roles[p.id], got = v.count?.[p.id] || 0;
+        return `<div class="player-item"><div><span class="player-icon">${p.icon}</span>${esc(p.name)}<span class="role ${r}">${ROLE_NAME[r]}</span></div>` +
+          `<div class="votes">${r === 'gm' ? '' : got + '票'}${v.votes[p.id] ? ' → ' + Room.who(v, v.votes[p.id]) : ''}</div></div>`;
+      }).join('') +
+      (isHost ? `<button class="btn-primary" data-a="again" style="margin-top:8px">もう一回(設定へ)</button>` : `<div class="wait-message">ホストが次を始めるのを待ってる…</div>`);
+  }
+  app.innerHTML = h + `</div>`;
+  tickTimer();
+}
+
+function myCard(v) {
+  if (v.myRole === 'gm') return `<div class="big-card"><div class="label">あなたは進行役</div><div class="word" style="font-size:22px">市民「${esc(v.words.citizen)}」<br>ウルフ「${esc(v.words.wolf)}」</div></div>`;
+  if (v.myRole === 'fox') return `<div class="big-card" style="background:linear-gradient(135deg,#e08a1e,#9a5208)"><div class="label">あなたは</div><div class="word">🦊 キツネ</div><div class="label" style="margin-top:6px">お題はない。話を合わせて、追放されないように</div></div>`;
+  if (!v.myWord) return `<div class="wait-message">このゲームには参加してない。次のゲームを待ってて</div>`;
+  return `<div class="big-card"><div class="label">あなたのお題</div><div class="word">${esc(v.myWord)}</div></div>`;
+}
+
+function tickTimer() {
+  const el = document.getElementById('timer'); if (!el) return;
+  const s = Math.max(0, Math.ceil((localEnd - Date.now()) / 1000));
+  el.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  el.classList.toggle('low', s <= 30);
+}
+setInterval(() => {
+  tickTimer();
+  const v = Room.view();
+  if (Room.isHost && v?.phase === 'talk' && Date.now() >= localEnd) Room.act({ t: 'tick' });
+}, 500);
+
+document.getElementById('app').addEventListener('click', e => {
+  const t = e.target.closest('[data-a],[data-set],[data-vote],[data-judge]'); if (!t) return;
+  const d = t.dataset;
+  if (d.set) return Room.act({ t: 'set', ...JSON.parse(d.set) });
+  if (d.vote) { if (confirm('この人に投票する?')) Room.act({ t: 'vote', target: d.vote }); return; }
+  if (d.judge) return Room.act({ t: 'judge', ok: d.judge === '1' });
+  if (d.a === 'words') return Room.act({ t: 'words', citizen: document.getElementById('w-c').value, wolf: document.getElementById('w-w').value });
+  if (d.a === 'guess') return Room.act({ t: 'guess', text: document.getElementById('g-t').value });
+  Room.act({ t: d.a });
+});
+
+Room.init({
+  game: 'wordwolf', title: 'ワードウルフ', max: 12,
+  newState, onAction, view, render,
+  canJoin: S => ['lobby', 'setup', 'result'].includes(S.phase),
+  onLeave: (S, pid) => { delete S.votes[pid]; if (S.phase === 'vote') tally(S); },
+  onBack: S => { S.phase = 'lobby'; },
+});
+</script>
+</body>
+</html>
