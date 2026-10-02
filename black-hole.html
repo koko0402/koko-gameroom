@@ -117,7 +117,7 @@ function draw() {
     const m = marks[i];
     if (m) s += `<text x="${c.x}" y="${c.y + 9}" text-anchor="middle" class="hand" font-size="27" fill="${PEN[m.p]}" transform="rotate(${(i * 37 % 13) - 6} ${c.x} ${c.y})">${m.n}</text>`;
     if (h === i) {
-      s += `<clipPath id="hc"><path d="${wobble(c.x, c.y, 20, i * 1.7)}"/></clipPath><g clip-path="url(#hc)" stroke="${PEN[0]}" stroke-width="2.2" stroke-linecap="round">`;
+      s += `<clipPath id="hc"><path d="${wobble(c.x, c.y, 20, i * 1.7)}"/></clipPath><g clip-path="url(#hc)" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round">`;
       for (let d = -40; d <= 40; d += 4.5) s += `<line x1="${c.x + d - 20}" y1="${c.y + 22}" x2="${c.x + d + 6}" y2="${c.y - 22}"/>`;
       s += `</g>`;
     }
@@ -146,8 +146,9 @@ function draw() {
 }
 
 svg.addEventListener('click', e => { if (!Online.canAct()) return; const i = e.target.dataset.i; if (i !== undefined) play(+i); });
-document.getElementById('r1').onclick = () => reset(0);
-document.getElementById('r2').onclick = () => reset(1);
+const playing = () => history.length > 0 && history.length < 20;
+document.getElementById('r1').onclick = () => { if (Online.askReset(playing())) reset(0); };
+document.getElementById('r2').onclick = () => { if (Online.askReset(playing())) reset(1); };
 Online.init({ game: 'blackhole', names: NAME,
   getState: () => ({ marks, player, history }),
   setState: s => { ({ marks, player, history } = s); draw(); },

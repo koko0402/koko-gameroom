@@ -129,8 +129,9 @@ function draw() {
 }
 
 svg.addEventListener('click', e => { if (!Online.canAct()) return; const k = e.target.dataset.k; if (k) click(k); });
-document.getElementById('r1').onclick = () => reset(0);
-document.getElementById('r2').onclick = () => reset(1);
+const playing = () => winner === null && !(HOME[0].every(k => at[k] === 0) && HOME[1].every(k => at[k] === 1));
+document.getElementById('r1').onclick = () => { if (Online.askReset(playing())) reset(0); };
+document.getElementById('r2').onclick = () => { if (Online.askReset(playing())) reset(1); };
 Online.init({ game: 'jintori', names: NAME,
   getState: () => ({ at, player, winner, passNote }),
   setState: s => { ({ at, player, winner, passNote } = s); picked = null; draw(); },

@@ -181,7 +181,7 @@ stage.addEventListener('click', e => {
     notes = []; peeked = null; phase = Online.active ? 'act' : 'gate'; draw();
   }
 });
-document.getElementById('reset').onclick = () => { reset(); if (Online.active) { phase = 'act'; draw(); } };
+document.getElementById('reset').onclick = () => { if (!Online.askReset(phase !== 'win' && (round > 1 || turn > 0 || pos[0] > 0))) return; reset(); if (Online.active) { phase = 'act'; draw(); } };
 Online.init({ game: 'sugoroku', names: NAME,
   getState: () => ({ pos, items, traps, fast, turn, phase, notes, winner, peeked, round }),
   setState: s => { ({ pos, items, traps, fast, turn, phase, notes, winner, peeked, round } = s); draw(); },

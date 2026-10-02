@@ -55,6 +55,8 @@ const Online = (() => {
     code = newCode(); api.me = 0;
     peer = new Peer(peerId(code));
     peer.on('open', () => { set('友達を待ってる…'); refresh(); });
+    // スマホがスリープしたあとなどに仲介サーバーから切れたら、つなぎ直す(切れたままだと友達が入れない)
+    peer.on('disconnected', () => { if (!peer.destroyed) peer.reconnect(); });
     // 入り直してきたときは古い接続を捨てて、新しい方をつなぐ
     peer.on('connection', c => { if (conn) conn.close(); wire(c); });
     peer.on('error', e => set(e.type === 'unavailable-id' ? 'そのコードは使われてる。もう一度「部屋を作る」を押して' : '接続できなかった(' + e.type + ')'));
@@ -84,22 +86,20 @@ const Online = (() => {
     let h;
     if (!peer) {
       h = `<button class="btn" data-o="host">部屋を作る</button>
-        <input id="o-code" maxlength="4" placeholder="コード" style="width:6em;font:inherit;padding:5px 8px;border-radius:8px;border:2px solid currentColor;background:transparent;color:inherit;text-transform:uppercase">
-        <button class="btn" data-o="join">入る</button>`;
+        <span class="online-join"><input id="o-code" maxlength="4" placeholder="コード" autocomplete="off" aria-label="部屋のコード"><button class="btn" data-o="join">入る</button></span>`;
     } else if (api.me === 0 && !api.active) {
-      h = `<span>部屋のコード <b style="font-size:22px;letter-spacing:.15em">${code}</b></span>
+      h = `<span>部屋のコード <b class="online-code">${code}</b></span>
         <button class="btn" data-o="copy">招待リンクをコピー</button>`;
     } else h = '';
-    box.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
-      <b>オンライン</b>${h}</div>
-      <div class="note" style="margin-top:4px">${status || '友達と別々の端末で遊ぶときに使う。1台で遊ぶなら何もしなくていい。'}</div>`;
+    box.className = 'online' + (api.active ? ' on' : '');
+    box.innerHTML = `<div class="online-row"><b class="online-title">オンライン対戦</b>${h}</div>
+      <div class="online-msg">${status || '別々の端末で遊ぶときだけ使う。1台で遊ぶなら何もしなくていい。'}</div>`;
     box.dataset.link = link;
   }
 
   api.init = c => {
     cfg = c;
     box = document.createElement('div');
-    box.style.cssText = 'margin:0 0 12px;padding:10px 12px;border-radius:12px;border:2px dashed currentColor;opacity:.95;font-size:15px';
     const top = document.querySelector('.top');
     top.after(box);
     box.addEventListener('click', e => {
@@ -129,5 +129,7 @@ const Online = (() => {
     if (JSON.stringify(cfg.getState()) !== last) send();
   };
   api.isMine = p => !api.active || p === api.me;
+  // 「最初から」を押したとき。対戦の途中なら確認する(オンラインだと相手の画面もリセットされる)
+  api.askReset = playing => !playing || confirm(api.active ? '最初からやり直す? 相手の画面もリセットされる' : '最初からやり直す?');
   return api;
 })();

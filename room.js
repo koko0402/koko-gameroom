@@ -59,6 +59,7 @@ const Room = (() => {
     // まずホストになろうとする。その部屋IDがもう使われてたら、参加者として入る
     peer = new Peer(hostPeerId());
     peer.on('open', () => becomeHost(name));
+    peer.on('disconnected', () => { if (api.isHost && !peer.destroyed) peer.reconnect(); });
     peer.on('error', e => {
       if (e.type === 'unavailable-id') { peer.destroy(); joinAsGuest(name); }
       else if (!api.joined) { step = 'error'; msg = 'つながらなかった(' + e.type + ')'; paint(); }
@@ -168,11 +169,12 @@ const Room = (() => {
   }
   function paint() { app.innerHTML = entrance(); footer(); const i = app.querySelector('input'); if (i) i.focus(); }
 
-  // ito と同じ、左下の「戻る」「抜ける」
+  // カードの下の「待機室へ」「抜ける」。画面の上に重ならないように、カードのすぐ下に置く
   function footer() {
     let f = document.getElementById('r-foot');
-    if (!f) { f = document.createElement('div'); f.id = 'r-foot'; document.body.appendChild(f); }
-    f.innerHTML = api.joined ? `${api.isHost && cfg.onBack ? '<button class="fixed-back" data-r="toLobby" style="bottom:80px">← 待機室へ</button>' : ''}<button class="fixed-back" data-r="leave">抜ける</button>` : '';
+    if (!f) { f = document.createElement('div'); f.id = 'r-foot'; f.className = 'room-foot'; app.after(f); }
+    const lobby = api.isHost && cfg.onBack && lastView && lastView.phase !== 'lobby';
+    f.innerHTML = api.joined ? `${lobby ? '<button class="room-foot-btn" data-r="toLobby">待機室に戻る</button>' : ''}<button class="room-foot-btn" data-r="leave">部屋を抜ける</button>` : '';
   }
 
   api.act = a => {

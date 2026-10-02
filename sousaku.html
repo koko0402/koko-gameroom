@@ -89,8 +89,15 @@ const SAMPLE = {
 let data, tab = 'play', cur = null, run = null;
 function load() {
   try { const s = localStorage.getItem(KEY); data = s ? JSON.parse(s) : null; } catch (e) { data = null; }
-  if (!data || !data.scenes) data = JSON.parse(JSON.stringify(SAMPLE));
-  data.seen = data.seen || [];
+  if (!data || !Array.isArray(data.scenes) || !data.scenes.length) data = JSON.parse(JSON.stringify(SAMPLE));
+  fix(data);
+}
+function fix(d) {
+  for (const k of ['chars', 'skills', 'items', 'seen']) if (!Array.isArray(d[k])) d[k] = [];
+  d.title = d.title || '';
+  d.scenes.forEach(s => { s.choices = Array.isArray(s.choices) ? s.choices : []; s.end = !!s.end; });
+  if (!d.scenes.some(s => s.id === d.start)) d.start = d.scenes[0].id;
+  return d;
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {} }
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -198,7 +205,7 @@ book.addEventListener('change', e => {
     save(); draw();
   } else if (t.id === 'imp' && t.files[0]) {
     t.files[0].text().then(txt => {
-      try { const d = JSON.parse(txt); if (!d.scenes || !d.start) throw 0; data = d; data.seen = data.seen || []; save(); cur = null; alert('読み込んだ'); draw(); }
+      try { const d = JSON.parse(txt); if (!Array.isArray(d.scenes) || !d.scenes.length) throw 0; data = fix(d); save(); cur = null; alert('読み込んだ'); draw(); }
       catch (err) { alert('このファイルは読み込めなかった'); }
     });
   }

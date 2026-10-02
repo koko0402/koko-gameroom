@@ -64,7 +64,7 @@ const QUESTIONS = [
 ];
 const NAME = ['あか', 'あお'];
 const card = document.getElementById('card');
-let q, phase, results, input, lastOk;
+let q, phase, results, input, lastOk, focused = -1;
 
 function reset() { q = 0; results = []; startQ(); }
 function startQ() { phase = Online.active ? 'answer' : 'gateA'; input = ''; lastOk = null; draw(); }
@@ -106,10 +106,11 @@ function draw() {
       `<p>答え: <b>${Q.ans[0]}</b><br><span class="note">${Q.memo}</span></p>` +
       `<button class="btn" data-a="next">${q + 1 < QUESTIONS.length ? '次の問題へ' : '結果を見る'}</button>`;
   }
+  const typing = document.activeElement?.id === 'ans';
   card.innerHTML = s;
   Online.sync();
   const box = document.getElementById('ans');
-  if (box) { box.focus(); box.oninput = () => input = box.value; box.onkeydown = e => { if (e.key === 'Enter') check(); }; }
+  if (box) { if (focused !== q || typing) { focused = q; box.focus(); } box.oninput = () => input = box.value; box.onkeydown = e => { if (e.key === 'Enter') check(); }; }
 }
 
 function check() {

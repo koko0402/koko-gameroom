@@ -220,7 +220,7 @@ svg.addEventListener('click', e => {
   const a = actions(player).find(a => a.type === 'place' && a.i === i);
   if (a) apply(a);
 });
-document.getElementById('reset').onclick = reset;
+document.getElementById('reset').onclick = () => { if (Online.askReset(winner === null && seen.size > 1)) reset(); };
 Online.init({ game: 'vidro', names: NAME,
   getState: () => ({ board, hand, player, winner, seen: [...seen] }),
   setState: s => { ({ board, hand, player, winner } = s); seen = new Set(s.seen); sel = null; draw(); },

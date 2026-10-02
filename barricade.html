@@ -154,8 +154,8 @@ function draw() {
   const cls = (winner ?? player) === 0 ? 'p1' : 'p2';
   t.className = 'turn' + (winner !== null ? ' win' : '');
   t.innerHTML = `<span class="dot ${cls}"></span>` + (winner !== null ? `${NAME[winner]}の勝ち` : `${NAME[player]}の番` + (err ? `<span class="note">　${err}</span>` : ''));
-  document.getElementById('w0').textContent = left[0];
-  document.getElementById('w1').textContent = left[1];
+  document.getElementById('w0').textContent = `赤の壁 残り${left[0]}`;
+  document.getElementById('w1').textContent = `青の壁 残り${left[1]}`;
 }
 
 svg.addEventListener('click', e => {
@@ -170,7 +170,7 @@ document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => {
   document.querySelectorAll('[data-mode]').forEach(x => x.classList.toggle('on', x === b));
   draw();
 });
-document.getElementById('reset').onclick = reset;
+document.getElementById('reset').onclick = () => { if (Online.askReset(winner === null && (walls.length > 0 || pos[0].join() !== '8,4' || pos[1].join() !== '0,4'))) reset(); };
 Online.init({ game: 'barricade', names: NAME,
   getState: () => ({ pos, walls, left, player, winner }),
   setState: s => { ({ pos, walls, left, player, winner } = s); err = ''; draw(); },

@@ -68,6 +68,24 @@ button { font: inherit; color: inherit; }
 .btn.on { background: var(--ink); color: var(--board); }
 .btn:disabled { opacity: .35; cursor: default; }
 
+/* オンライン対戦のパネル(online.js が作る) */
+.online {
+  margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; font-size: 14px;
+  border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
+  background: color-mix(in srgb, currentColor 6%, transparent);
+}
+.online.on { border-color: var(--ok); }
+.online-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.online-title { font-size: 14px; flex-basis: 100%; }
+.online-join { display: inline-flex; gap: 6px; }
+.online-join input {
+  width: 5.5em; font: inherit; padding: 5px 8px; border-radius: 999px; text-align: center;
+  border: 2px solid currentColor; background: transparent; color: inherit; text-transform: uppercase; letter-spacing: .1em;
+}
+.online-join input::placeholder { color: inherit; opacity: .5; letter-spacing: 0; }
+.online-code { font-size: 22px; letter-spacing: .15em; }
+.online-msg { margin-top: 6px; font-size: 13px; opacity: .8; }
+
 details.rules { margin-top: 20px; color: var(--sub); }
 details.rules summary { cursor: pointer; font-weight: 700; color: var(--ink); }
 details.rules li { margin: 4px 0; }

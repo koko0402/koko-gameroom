@@ -141,7 +141,7 @@ stage.addEventListener('click', e => {
   else if (b.dataset.a === 'doubt') judge(true);
   else if (b.dataset.a === 'next') { turn = 1 - turn; gate(); }
 });
-document.getElementById('reset').onclick = reset;
+document.getElementById('reset').onclick = () => { if (Online.askReset(played > 0 && phase !== 'end')) reset(); };
 Online.init({ game: 'liar', names: NAME,
   getState: () => ({ hands, score, turn, played, phase, pick, say, log, last }),
   setState: s => { ({ hands, score, turn, played, phase, pick, say, log, last } = s); draw(); },

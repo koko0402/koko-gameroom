@@ -264,7 +264,12 @@ Room.init({
   game: 'wordwolf', title: 'ワードウルフ', max: 12,
   newState, onAction, view, render,
   canJoin: S => ['lobby', 'setup', 'result'].includes(S.phase),
-  onLeave: (S, pid) => { delete S.votes[pid]; if (S.phase === 'vote') tally(S); },
+  onLeave: (S, pid) => {
+    delete S.votes[pid];
+    if (S.phase === 'vote') tally(S);
+    if (S.phase === 'guess' && pid === S.executed && !S.guess) { S.guessOk = false; finish(S, 'citizen'); }
+    if (S.phase === 'writing' && pid === S.writer) { S.writer = null; S.phase = 'setup'; }
+  },
   onBack: S => { S.phase = 'lobby'; },
 });
 </script>

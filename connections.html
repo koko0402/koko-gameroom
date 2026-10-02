@@ -139,7 +139,7 @@ svg.addEventListener('click', e => {
   const g = e.target.closest('.cell');
   if (g) play(+g.dataset.r, +g.dataset.c);
 });
-document.getElementById('reset').onclick = reset;
+document.getElementById('reset').onclick = () => { if (Online.askReset(winner === null && Object.keys(bridge).length > 0)) reset(); };
 Online.init({ game: 'connections', names: NAME,
   getState: () => ({ bridge, player, winner, win }),
   setState: s => { ({ bridge, player, winner, win } = s); draw(); },

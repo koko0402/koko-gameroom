@@ -17,7 +17,22 @@
   .game svg { display: block; width: 100%; height: auto; margin-bottom: 10px; }
   .game h2 { font-size: 18px; margin: 0; }
   .game p { font-size: 14px; color: var(--sub); margin: 4px 0 0; }
+  .game { transition: transform .12s, box-shadow .12s; }
+  .game:hover { transform: translateY(-2px); box-shadow: 0 4px 0 var(--line); }
   .game:hover h2 { text-decoration: underline; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 0 6px; border-radius: 4px; margin-left: 4px; vertical-align: 2px; background: var(--p2); color: #fff; }
+  /* スマホでは2列にして、一覧をひと目で見られるようにする */
+  @media (max-width: 520px) {
+    header { padding: 20px 0 14px; }
+    header h1 { font-size: 28px; }
+    header p { font-size: 14px; }
+    .shelf { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .game { padding: 10px; }
+    .game svg { margin-bottom: 6px; }
+    .game h2 { font-size: 15px; line-height: 1.4; }
+    .game p { font-size: 12px; line-height: 1.5; }
+    .tag { display: block; width: fit-content; margin: 2px 0 0; }
+  }
 </style>
 </head>
 <body>
@@ -143,8 +158,8 @@
         <circle cx="92" cy="52" r="14" fill="#7a0c20"/><circle cx="92" cy="49" r="14" fill="#ff3b5c"/>
         <text x="40" y="66" font-size="14" fill="#ffd84d" font-weight="800">♪?</text>
       </svg>
-      <h2>歌詞で曲あて</h2>
-      <p>オンライン専用。歌詞が1行ずつ出る早押しクイズ。何人でも。</p>
+      <h2>歌詞で曲あて<span class="tag">オンライン専用</span></h2>
+      <p>歌詞が1行ずつ出る早押しクイズ。何人でも。</p>
     </a>
 
     <a class="game" href="wordwolf.html">
@@ -154,8 +169,8 @@
         <g fill="#f3f1e7"><rect x="20" y="40" width="22" height="28" rx="3"/><rect x="49" y="40" width="22" height="28" rx="3"/><rect x="78" y="40" width="22" height="28" rx="3"/></g>
         <text x="31" y="59" text-anchor="middle" font-size="12">🐶</text><text x="60" y="59" text-anchor="middle" font-size="12">🐺</text><text x="89" y="59" text-anchor="middle" font-size="12">🦊</text>
       </svg>
-      <h2>ワードウルフ</h2>
-      <p>オンライン専用。1人だけちがうお題の人を探す。3〜12人、キツネもあり。</p>
+      <h2>ワードウルフ<span class="tag">オンライン専用</span></h2>
+      <p>1人だけちがうお題の人を探す。3〜12人、キツネもあり。</p>
     </a>
 
     <a class="game" href="sousaku.html">

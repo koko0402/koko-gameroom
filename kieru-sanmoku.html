@@ -100,7 +100,7 @@ function draw() {
 }
 
 svg.addEventListener('click', e => { if (!Online.canAct()) return; const i = e.target.dataset.i; if (i !== undefined) play(+i); });
-document.getElementById('reset').onclick = reset;
+document.getElementById('reset').onclick = () => { if (Online.askReset(winner === null && marks[0].length + marks[1].length > 0)) reset(); };
 Online.init({ game: 'kieru', names: NAME,
   getState: () => ({ marks, player, winner }),
   setState: s => { ({ marks, player, winner } = s); draw(); },

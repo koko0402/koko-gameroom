@@ -173,7 +173,7 @@ document.getElementById('pick').addEventListener('click', e => {
   const b = e.target.closest('[data-c]'); if (b && !b.disabled) { color = b.dataset.c; draw(); }
 });
 document.getElementById('reveal').onclick = () => { reveal = !reveal; draw(); };
-document.getElementById('reset').onclick = reset;
+document.getElementById('reset').onclick = () => { if (Online.askReset(!over && last !== -1)) reset(); };
 Online.init({ game: 'reversi', names: ['黒', '白'],
   getState: () => ({ board, stock, player, over, last, lastQ, allGray }),
   setState: s => { ({ board, stock, player, over, last, lastQ, allGray } = s); if (!legal(color)) color = ['B', 'W', 'G'].find(legal) || color; draw(); },
