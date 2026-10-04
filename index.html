@@ -6,31 +6,62 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<meta name="theme-color" content="#1f2937">
+<meta name="theme-color" content="#f6f3ea">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="ゲーム部屋">
 <title>ここのゲーム部屋</title>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Yomogi&display=swap">
 <style>
-  header { padding: 32px 0 20px; }
-  header h1 { font-size: 34px; font-weight: 800; margin: 0; letter-spacing: .02em; }
-  header p { margin: 6px 0 0; color: var(--sub); }
-  .shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
-  .game {
-    display: block; text-decoration: none; background: var(--board);
-    border-radius: 14px; padding: 14px; box-shadow: 0 2px 0 var(--line);
+  /* 方眼ノートに、手描きの絵をマスキングテープで貼った感じ */
+  :root, :root:not([data-theme="light"]) { --ink: #2b2a27; --sub: #5f5a50; }
+  body {
+    background-color: #f6f3ea;
+    background-image:
+      linear-gradient(rgba(90,130,170,.13) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(90,130,170,.13) 1px, transparent 1px);
+    background-size: 22px 22px;
+    color: var(--ink);
   }
-  .game svg { display: block; width: 100%; height: auto; margin-bottom: 10px; }
-  .game h2 { font-size: 18px; margin: 0; }
-  .game p { font-size: 14px; color: var(--sub); margin: 4px 0 0; }
-  .game:hover h2 { text-decoration: underline; }
+  header { padding: 30px 0 22px; }
+  header h1 { font-family: 'Yomogi', cursive; font-size: 40px; font-weight: 400; margin: 0; display: inline-block; position: relative; }
+  header h1 svg { position: absolute; left: -4px; right: -4px; bottom: -6px; width: calc(100% + 8px); height: 12px; }
+  header p { margin: 10px 0 0; color: var(--sub); font-family: 'Yomogi', cursive; font-size: 17px; }
+  .shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 26px 18px; padding-top: 6px; }
+  .game {
+    display: block; text-decoration: none; background: #fffdf8; position: relative;
+    border-radius: 3px; padding: 14px 14px 12px; color: var(--ink);
+    box-shadow: 0 1px 2px rgba(0,0,0,.12), 0 6px 14px rgba(60,50,30,.10);
+    transform: rotate(var(--tilt, 0deg)); transition: transform .15s;
+  }
+  .game::before {
+    content: ''; position: absolute; top: -9px; left: 50%; width: 70px; height: 20px; margin-left: -35px;
+    background: var(--tape, rgba(240,200,90,.55)); transform: rotate(var(--tape-tilt, -3deg));
+    box-shadow: 0 1px 1px rgba(0,0,0,.06);
+  }
+  .game:nth-child(3n+1) { --tilt: -1.2deg; --tape: rgba(240,200,90,.55); --tape-tilt: 4deg; }
+  .game:nth-child(3n+2) { --tilt: .9deg; --tape: rgba(130,190,220,.5); --tape-tilt: -5deg; }
+  .game:nth-child(3n) { --tilt: -.4deg; --tape: rgba(235,150,150,.5); --tape-tilt: 2deg; }
+  .game:nth-child(4n) { --tilt: 1.5deg; }
+  .game:nth-child(5n) { --tilt: -1.8deg; }
+  .game:hover { transform: rotate(0deg) translateY(-2px); }
+  .game svg { display: block; width: 100%; height: auto; margin-bottom: 10px; filter: url(#rough); }
+  .game h2 { font-family: 'Yomogi', cursive; font-weight: 400; font-size: 21px; margin: 0; }
+  .game p { font-size: 13px; color: var(--sub); margin: 4px 0 0; }
 </style>
 </head>
 <body>
 <div class="wrap">
+  <!-- 絵の線を手で描いたみたいに少し揺らす -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <filter id="rough" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="7" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="3.2"/>
+    </filter>
+  </svg>
   <header>
-    <h1>ゲーム部屋</h1>
+    <h1>ゲーム部屋<svg viewBox="0 0 200 12" preserveAspectRatio="none"><path d="M2 8 C40 3 70 10 110 6 S170 4 198 7" fill="none" stroke="#e8a33d" stroke-width="3.5" stroke-linecap="round"/></svg></h1>
     <p>保存してたボドゲと、思いついたゲームを置いてる。1台で交代しても、友達とオンラインでも遊べる。</p>
   </header>
   <div class="shelf">
@@ -159,7 +190,11 @@
         <rect x="10" y="4" width="100" height="72" rx="6" fill="#1f2a44"/>
         <circle cx="90" cy="20" r="9" fill="#f3f1e7"/><circle cx="94" cy="17" r="8" fill="#1f2a44"/>
         <g fill="#f3f1e7"><rect x="20" y="40" width="22" height="28" rx="3"/><rect x="49" y="40" width="22" height="28" rx="3"/><rect x="78" y="40" width="22" height="28" rx="3"/></g>
-        <text x="31" y="59" text-anchor="middle" font-size="12">🐶</text><text x="60" y="59" text-anchor="middle" font-size="12">🐺</text><text x="89" y="59" text-anchor="middle" font-size="12">🦊</text>
+        <g stroke="#2c3a5e" stroke-width="1.2" stroke-linejoin="round">
+          <path d="M25 52 q-2-6 2-7 M37 52 q2-6-2-7" fill="#c49a6c"/><circle cx="31" cy="55" r="5.5" fill="#e3c39a"/><circle cx="29" cy="54" r=".7" fill="#2c3a5e"/><circle cx="33" cy="54" r=".7" fill="#2c3a5e"/>
+          <path d="M55 51 l1-6 l3 4 M65 51 l-1-6 l-3 4" fill="#8a8f9c"/><circle cx="60" cy="55" r="5.5" fill="#a9aebb"/><circle cx="58" cy="54" r=".7" fill="#2c3a5e"/><circle cx="62" cy="54" r=".7" fill="#2c3a5e"/>
+          <path d="M84 51 l0-7 l3 4 M94 51 l0-7 l-3 4" fill="#d9822b"/><circle cx="89" cy="55" r="5.5" fill="#e8a04f"/><circle cx="87" cy="54" r=".7" fill="#2c3a5e"/><circle cx="91" cy="54" r=".7" fill="#2c3a5e"/>
+        </g>
       </svg>
       <h2>ワードウルフ</h2>
       <p>オンライン専用。1人だけちがうお題の人を探す。3〜12人、キツネもあり。</p>
