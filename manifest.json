@@ -1,0 +1,16 @@
+{
+  "name": "ここのゲーム部屋",
+  "short_name": "ゲーム部屋",
+  "description": "ブラウザで遊べるボドゲ集。1台で交代でも、友達とオンラインでも遊べる",
+  "lang": "ja",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#d9e0e8",
+  "theme_color": "#1f2937",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

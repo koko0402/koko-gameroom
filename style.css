@@ -24,6 +24,7 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; }
+html { -webkit-text-size-adjust: 100%; touch-action: manipulation; }
 body {
   background: var(--table);
   color: var(--ink);
@@ -39,7 +40,7 @@ button { font: inherit; color: inherit; }
 
 /* ゲーム画面 */
 .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-.top a { text-decoration: none; color: var(--sub); font-size: 15px; }
+.top a { text-decoration: none; color: var(--sub); font-size: 15px; padding: 10px 12px 10px 0; }
 .top h1 { font-size: 22px; font-weight: 800; margin: 0; }
 
 .turn {

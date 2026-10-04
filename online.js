@@ -76,15 +76,27 @@ const Online = (() => {
   }
 
   // 画面上の小さなパネル
-  let box;
-  function set(t) { status = t; refresh(); }
+  // スマホで盤が下に押し出されないように、使うまでは1行に畳んでおく
+  let box, opened = false;
+  function set(t) { status = t; opened = true; refresh(); }
   function refresh() {
     if (!box) return;
     const link = code ? `${location.origin}${location.pathname}?room=${code}` : '';
+    box.dataset.link = link;
+    if (!opened) {
+      box.style.borderStyle = 'none'; box.style.padding = '0';
+      box.innerHTML = `<button class="btn" data-o="open" style="font-size:14px;padding:4px 14px">友達とオンラインで遊ぶ</button>`;
+      return;
+    }
+    box.style.borderStyle = 'dashed'; box.style.padding = '10px 12px';
+    if (api.active) {
+      box.innerHTML = `<div class="note" style="margin:0"><b>オンライン中</b>　${status}</div>`;
+      return;
+    }
     let h;
     if (!peer) {
       h = `<button class="btn" data-o="host">部屋を作る</button>
-        <input id="o-code" maxlength="4" placeholder="コード" style="width:6em;font:inherit;padding:5px 8px;border-radius:8px;border:2px solid currentColor;background:transparent;color:inherit;text-transform:uppercase">
+        <input id="o-code" maxlength="4" placeholder="コード" style="width:6em;font:inherit;font-size:16px;padding:5px 8px;border-radius:8px;border:2px solid currentColor;background:transparent;color:inherit;text-transform:uppercase">
         <button class="btn" data-o="join">入る</button>`;
     } else if (api.me === 0 && !api.active) {
       h = `<span>部屋のコード <b style="font-size:22px;letter-spacing:.15em">${code}</b></span>
@@ -92,8 +104,7 @@ const Online = (() => {
     } else h = '';
     box.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
       <b>オンライン</b>${h}</div>
-      <div class="note" style="margin-top:4px">${status || '友達と別々の端末で遊ぶときに使う。1台で遊ぶなら何もしなくていい。'}</div>`;
-    box.dataset.link = link;
+      <div class="note" style="margin-top:4px">${status || '部屋を作ってコードを友達に送るか、もらったコードで入る。1台で遊ぶなら何もしなくていい。'}</div>`;
   }
 
   api.init = c => {
@@ -104,6 +115,7 @@ const Online = (() => {
     top.after(box);
     box.addEventListener('click', e => {
       const a = e.target.closest('[data-o]')?.dataset.o;
+      if (a === 'open') { opened = true; refresh(); }
       if (a === 'host') host();
       if (a === 'join') join(document.getElementById('o-code').value);
       if (a === 'copy') {

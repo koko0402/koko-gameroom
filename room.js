@@ -171,8 +171,8 @@ const Room = (() => {
   // ito と同じ、左下の「戻る」「抜ける」
   function footer() {
     let f = document.getElementById('r-foot');
-    if (!f) { f = document.createElement('div'); f.id = 'r-foot'; document.body.appendChild(f); }
-    f.innerHTML = api.joined ? `${api.isHost && cfg.onBack ? '<button class="fixed-back" data-r="toLobby" style="bottom:80px">← 待機室へ</button>' : ''}<button class="fixed-back" data-r="leave">抜ける</button>` : '';
+    if (!f) { f = document.createElement('div'); f.id = 'r-foot'; app.after(f); }
+    f.innerHTML = api.joined ? `${api.isHost && cfg.onBack ? '<button class="fixed-back" data-r="toLobby">← 待機室へ</button>' : ''}<button class="fixed-back" data-r="leave">抜ける</button>` : '';
   }
 
   api.act = a => {
